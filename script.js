@@ -1,359 +1,130 @@
 /**
- * THE COCKTAIL CABINET — MEMORY MATCH
- * Production Gameplay, Web Audio Synthesizer, & Cocktail Knowledge Engine
+ * THE COCKTAIL CABINET — MASTER BARTENDER MEMORY & CODEX
+ * Production Game Engine, Synthesizer & Curated 5-Playthrough Challenge Dataset
  */
 
 'use strict';
 
 /* ==========================================================================
-   1. COCKTAIL KNOWLEDGE DATABASE (24 Classic & Modern Standard Cocktails)
+   1. IN-SCRIPT COCKTAIL CONTENT DATASET (EXACTLY 5 PLAYABLE EXAMPLES)
    ========================================================================== */
 const COCKTAILS_DB = [
   {
     id: 'negroni',
     name: 'Negroni',
-    family: 'Aperitivo / Equal Parts',
+    difficulty: 'Apprentice',
     spirit: 'Gin',
-    formula: '1 oz Gin, 1 oz Campari, 1 oz Sweet Vermouth',
-    sensory: 'Bitter-sweet, herbal, botanical, and spirit-forward.',
-    method: 'Stir over ice',
-    glass: 'Rocks / Old Fashioned',
-    ice: 'Large clear cube',
-    garnish: 'Orange peel expression',
-    history: 'Conceived in Florence, Italy circa 1919 when Count Camillo Negroni requested gin in his Americano.',
-    mistake: 'Shaking the cocktail: causes over-aeration and dulls the ruby crystal appearance.'
+    family: 'Equal Parts / Aperitivo',
+    formula: '1 oz London Dry Gin, 1 oz Campari, 1 oz Sweet Vermouth',
+    technique: 'Stir with ice for 30s until chilled & diluted',
+    glassware: 'Rocks / Old Fashioned',
+    ice: 'Single large clear cube',
+    garnish: 'Expressed orange peel twist',
+    sensoryProfile: 'Bittersweet gentian, pine juniper botanicals, and warm herbal wine spice.',
+    origin: 'Florence, Italy (c. 1919) at Caffè Casoni for Count Camillo Negroni.',
+    pitfall: 'Never shake: shaking over-dilutes and destroys the ruby crystal clarity.'
   },
   {
     id: 'old-fashioned',
     name: 'Old Fashioned',
-    family: 'Ancestral',
+    difficulty: 'Apprentice',
     spirit: 'Whiskey',
-    formula: '2 oz Bourbon or Rye, 1 sugar cube, 2 dashes Angostura',
-    sensory: 'Rich, warming, aromatic, and spirit-centric.',
-    method: 'Stir & dilute slowly',
-    glass: 'Double Rocks',
-    ice: 'Single large rock',
-    garnish: 'Expressed orange twist',
-    history: 'The archetypal cocktail definition from 1806: spirits, sugar, water, and bitters.',
-    mistake: 'Muddling neon maraschino cherries and orange slices into a fruit paste soup.'
+    family: 'Ancestral',
+    formula: '2 oz Bourbon or Rye, 1 Demerara cube, 3 dashes Angostura, splash water',
+    technique: 'Gently dissolve sugar with bitters, then slowly stir with ice',
+    glassware: 'Double Rocks',
+    ice: 'Dense hand-carved ice sphere',
+    garnish: 'Expressed orange twist & brandied cherry',
+    sensoryProfile: 'Warming grain oak, vanilla caramel, and aromatic herbal bitters.',
+    origin: 'Codified in 1806 as spirit, sugar, water, and bitters; champion of the Pendennis Club.',
+    pitfall: 'Do not muddle fruit salad into paste; respect the pure spirit-forward architecture.'
   },
   {
     id: 'daiquiri',
     name: 'Daiquiri',
-    family: 'Sour',
+    difficulty: 'Bartender',
     spirit: 'Rum',
-    formula: '2 oz White Rum, 3/4 oz Fresh Lime Juice, 3/4 oz Demerara Syrup',
-    sensory: 'Crisp, zesty, clean, and perfectly sweet-tart.',
-    method: 'Hard shake with ice',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Lime wheel float',
-    history: 'Engineered in Cuba around 1898 near the Daiquirí iron mines, championed by Hemingway.',
-    mistake: 'Using bottled sour mix or failing to shake hard enough for chilling and dilution.'
-  },
-  {
-    id: 'manhattan',
-    name: 'Manhattan',
-    family: 'Spirit-Forward',
-    spirit: 'Whiskey',
-    formula: '2 oz Rye Whiskey, 1 oz Sweet Vermouth, 2 dashes Angostura',
-    sensory: 'Spicy, rich, lush, and velvety.',
-    method: 'Stir with ice',
-    glass: 'Nick & Nora / Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Brandied Luxardo cherry',
-    history: 'Invented at The Manhattan Club in New York City during the early 1870s.',
-    mistake: 'Storing sweet vermouth on an unrefrigerated back bar where it oxidizes.'
+    family: 'Classic Sour',
+    formula: '2 oz White Rum, 3/4 oz Fresh Lime Juice, 3/4 oz Rich Simple Syrup',
+    technique: 'Hard vigorous shake with solid ice cubes',
+    glassware: 'Coupe',
+    ice: 'None (Double strained into frosty glass)',
+    garnish: 'Dehydrated lime wheel float',
+    sensoryProfile: 'Crisp vibrant citrus, sugarcane roundness, and dry refreshing finish.',
+    origin: 'Daiquirí, Cuba (1898) by mining engineer Jennings Cox; popularized by Hemingway.',
+    pitfall: 'Never use pasteurized bottled citrus; fresh cold-pressed lime is mandatory.'
   },
   {
     id: 'margarita',
     name: 'Margarita',
-    family: 'Daisy',
+    difficulty: 'Bartender',
     spirit: 'Tequila',
+    family: 'Daisy',
     formula: '2 oz Blanco Tequila, 1 oz Cointreau, 3/4 oz Fresh Lime Juice',
-    sensory: 'Earthy, bright citrus, punchy, and saline.',
-    method: 'Shake vigorously',
-    glass: 'Rocks or Coupe',
-    ice: 'Fresh cubes or Up',
-    garnish: 'Sea salt half-rim & lime wheel',
-    history: 'Evolved from the Daisy cocktail tradition (Daisy is Spanish for Margarita) in Mexico.',
-    mistake: 'Salting the entire rim inside and out, dropping salt directly into the drink.'
-  },
-  {
-    id: 'martini',
-    name: 'Dry Martini',
-    family: 'Spirit-Forward',
-    spirit: 'Gin',
-    formula: '2.5 oz London Dry Gin, 1/2 oz Dry Vermouth, 1 dash Orange Bitters',
-    sensory: 'Crisp, bone-dry, aromatic, and bracingly cold.',
-    method: 'Stir patiently',
-    glass: 'Martini / Nick & Nora',
-    ice: 'None (Sub-zero chilled glass)',
-    garnish: 'Lemon twist or Castelvetrano olive',
-    history: 'Descended from the Martinez during the late 19th century American cocktail explosion.',
-    mistake: 'Serving in a warm glass or shaking, which clouds the drink and bruises the texture.'
-  },
-  {
-    id: 'whiskey-sour',
-    name: 'Whiskey Sour',
-    family: 'Sour',
-    spirit: 'Whiskey',
-    formula: '2 oz Bourbon, 3/4 oz Lemon Juice, 1/2 oz Simple, 1/2 oz Egg White',
-    sensory: 'Silky, creamy foam, tart, and rounded bourbon caramel.',
-    method: 'Dry shake, then wet shake',
-    glass: 'Rocks or Coupe',
-    ice: 'Rocks or served Up',
-    garnish: 'Angostura bitters art drops',
-    history: 'First recorded in Jerry Thomas’s 1862 Bartenders Guide; egg white adds velvety mouthfeel.',
-    mistake: 'Skipping the reverse dry shake, resulting in thin, sad, watery foam.'
-  },
-  {
-    id: 'mai-tai',
-    name: '1944 Mai Tai',
-    family: 'Tiki / Tropical',
-    spirit: 'Rum',
-    formula: '2 oz Aged Jamaican Rum, 3/4 oz Lime, 1/2 oz Orgeat, 1/2 oz Orange Curaçao',
-    sensory: 'Nutty almond, pungent funk, bright acidity, and complex spice.',
-    method: 'Quick shake with crushed ice',
-    glass: 'Double Rocks',
-    ice: 'Packed crushed ice',
-    garnish: 'Spent lime shell & fresh mint bouquet (island & palm tree motif)',
-    history: 'Created by Victor "Trader Vic" Bergeron in Oakland, 1944, for Tahitian guests.',
-    mistake: 'Adding pineapple juice and grenadine, turning a sacred sour into artificial punch.'
+    technique: 'Shake vigorously with ice and double strain',
+    glassware: 'Coupe or Rocks',
+    ice: 'Fresh rocks or served Up',
+    garnish: 'Sea salt half-rim & fresh lime wheel',
+    sensoryProfile: 'Earthy roasted agave, brisk orange perfume, and zesty saline snap.',
+    origin: 'Mexico (c. 1930s-1940s); direct evolution of the Daisy cocktail family.',
+    pitfall: 'Never salt the inside rim; falling salt granules over-salinate the balanced cocktail.'
   },
   {
     id: 'espresso-martini',
     name: 'Espresso Martini',
+    difficulty: 'Head Bartender',
+    spirit: 'Vodka',
     family: 'Modern Classic',
-    spirit: 'Vodka',
-    formula: '1.5 oz Vodka, 1 oz Fresh Hot Espresso, 3/4 oz Coffee Liqueur',
-    sensory: 'Deep roasted coffee, bitter-sweet crema, and smooth alcohol warmth.',
-    method: 'Hard shake with solid cubes',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Three coffee beans (health, wealth, happiness)',
-    history: 'Created by Dick Bradsell at Fred’s Club London in 1983 for a supermodel.',
-    mistake: 'Using stale, cold brewed dregs rather than fresh espresso, killing the thick crema head.'
-  },
-  {
-    id: 'boulevardier',
-    name: 'Boulevardier',
-    family: 'Aperitivo / Twist',
-    spirit: 'Whiskey',
-    formula: '1.5 oz Bourbon or Rye, 1 oz Campari, 1 oz Sweet Vermouth',
-    sensory: 'Bitter-sweet, oaky spice, vanilla, and dark cherry undertones.',
-    method: 'Stir with ice',
-    glass: 'Rocks or Nick & Nora',
-    ice: 'Large ice block',
-    garnish: 'Expressed orange or cherry',
-    history: 'Created by Erskine Gwynne in 1920s Paris, editor of the expat magazine The Boulevardier.',
-    mistake: 'Confusing it with a Negroni: the bourbon adds heavier sweetness and higher proof presence.'
-  },
-  {
-    id: 'sidecar',
-    name: 'Sidecar',
-    family: 'Daisy / Sour',
-    spirit: 'Brandy',
-    formula: '1.5 oz Cognac, 3/4 oz Cointreau, 3/4 oz Fresh Lemon Juice',
-    sensory: 'Warm grape spirit, rich orange perfume, and brisk tartness.',
-    method: 'Shake with ice',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Delicate sugar rim & lemon peel',
-    history: 'Popularized at Harry’s New York Bar in Paris after WWI, named after a military motorcycle.',
-    mistake: 'Caking the entire lip in thick sugar, which overpowers the dry cognac complexity.'
-  },
-  {
-    id: 'sazerac',
-    name: 'Sazerac',
-    family: 'Ancestral',
-    spirit: 'Whiskey',
-    formula: '2 oz Rye Whiskey, 1 barspoon Demerara, 3 dashes Peychaud’s, Absinthe rinse',
-    sensory: 'Anise aroma, medicinal floral bitters, and dry fiery grain.',
-    method: 'Stir in ice glass, strain into rinsed glass',
-    glass: 'Chilled Rocks (neat)',
-    ice: 'No ice in final glass',
-    garnish: 'Lemon peel twist (discarded)',
-    history: 'The official cocktail of New Orleans, originally crafted with French Cognac pre-phylloxera.',
-    mistake: 'Dropping ice cubes into the final service glass or leaving excess unswirled absinthe.'
-  },
-  {
-    id: 'french-75',
-    name: 'French 75',
-    family: 'Sparkling / Sour',
-    spirit: 'Gin',
-    formula: '1 oz Gin, 1/2 oz Lemon Juice, 1/2 oz Simple, topped with Champagne',
-    sensory: 'Effervescent, snappy, uplifting, and floral citrus.',
-    method: 'Shake base, strain, top with bubbles',
-    glass: 'Champagne Flute or Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Long spiral lemon twist',
-    history: 'Named after the fast-firing French 75mm field gun of WWI for its remarkable kick.',
-    mistake: 'Shaking the Champagne inside the cocktail shaker (explodes the shaker seal).'
-  },
-  {
-    id: 'aviation',
-    name: 'Aviation',
-    family: 'Sour / Modified',
-    spirit: 'Gin',
-    formula: '2 oz Gin, 1/2 oz Maraschino Liqueur, 1/4 oz Crème de Violette, 3/4 oz Lemon',
-    sensory: 'Floral violet, dry cherry, botanical juniper, and sky-blue tint.',
-    method: 'Shake with ice',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Brandied cherry',
-    history: 'Published by Hugo Ensslin in 1916 at the Hotel Wallick in New York during early flight era.',
-    mistake: 'Over-measuring Crème de Violette, turning the drink into soap-scented mouthwash.'
-  },
-  {
-    id: 'last-word',
-    name: 'The Last Word',
-    family: 'Equal Parts',
-    spirit: 'Gin',
-    formula: '3/4 oz Gin, 3/4 oz Green Chartreuse, 3/4 oz Maraschino, 3/4 oz Lime',
-    sensory: 'Pungent alpine herbs, medicinal sweetness, and sharp lime acidity.',
-    method: 'Shake with ice',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Brandied cherry',
-    history: 'Created at the Detroit Athletic Club in 1916, resurrected by Murray Stenson in 2004.',
-    mistake: 'Failing to shake vigorously enough to temper the fiery 110-proof Chartreuse botanicals.'
-  },
-  {
-    id: 'penicillin',
-    name: 'Penicillin',
-    family: 'Modern Sour',
-    spirit: 'Whiskey',
-    formula: '2 oz Blended Scotch, 3/4 oz Lemon, 3/8 oz Honey-Ginger Syrup, Islay Float',
-    sensory: 'Peaty smoke aroma, fiery spicy ginger warmth, and balancing honeyed malt.',
-    method: 'Shake base, float peated Scotch',
-    glass: 'Rocks',
-    ice: 'Large ice block',
-    garnish: 'Candied ginger on a pick',
-    history: 'Crafted in 2005 by Australian bartender Sam Ross at Milk & Honey, New York.',
-    mistake: 'Shaking the Islay Scotch into the mix rather than floating it for direct aromatic impact.'
-  },
-  {
-    id: 'clover-club',
-    name: 'Clover Club',
-    family: 'Sour',
-    spirit: 'Gin',
-    formula: '1.5 oz Gin, 1/2 oz Raspberry Syrup, 1/2 oz Dry Vermouth, 1/2 oz Lemon, Egg White',
-    sensory: 'Bright berry fruit, herbaceous dryness, and pillowy creamy head.',
-    method: 'Dry shake, then wet shake',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Fresh raspberries on pick',
-    history: 'Named after the Bellevue-Stratford Philadelphia gentlemen’s club in the 1890s.',
-    mistake: 'Omitting the dry vermouth; modern specs require vermouth to cut cloying berry sweetness.'
-  },
-  {
-    id: 'paloma',
-    name: 'Paloma',
-    family: 'Highball',
-    spirit: 'Tequila',
-    formula: '2 oz Blanco Tequila, 1/2 oz Lime Juice, topped with 4 oz Grapefruit Soda',
-    sensory: 'Fizzy, bitter-grapefruit zest, agave earth, and quenching thirst relief.',
-    method: 'Build in glass with ice',
-    glass: 'Highball / Collins',
-    ice: 'Tall column or cubes',
-    garnish: 'Salt rim & pink grapefruit wedge',
-    history: 'The most popular tequila cocktail consumed in Mexico, credited to Don Javier Delgado Corona.',
-    mistake: 'Using flat grapefruit juice without bubbles; effervescence is essential to highball dynamics.'
-  },
-  {
-    id: 'moscow-mule',
-    name: 'Moscow Mule',
-    family: 'Buck / Highball',
-    spirit: 'Vodka',
-    formula: '1.5 oz Vodka, 1/2 oz Fresh Lime Juice, 4 oz Spicy Ginger Beer',
-    sensory: 'Fiery ginger spice, tingling cold metal, and zesty lime snap.',
-    method: 'Build over crushed ice',
-    glass: 'Copper Mug',
-    ice: 'Crushed ice',
-    garnish: 'Lime wheel and slapped fresh mint sprig',
-    history: 'Devised in 1941 at the Cock ’n Bull bar to sell surplus Smirnoff vodka and ginger beer.',
-    mistake: 'Substituting cheap sweet ginger ale for genuine spicy fermented ginger beer.'
-  },
-  {
-    id: 'corpse-reviver-2',
-    name: 'Corpse Reviver No. 2',
-    family: 'Equal Parts / Hangover Cure',
-    spirit: 'Gin',
-    formula: '3/4 oz Gin, 3/4 oz Cointreau, 3/4 oz Lillet Blanc, 3/4 oz Lemon, Absinthe rinse',
-    sensory: 'Refreshing, bright citrus, subtle botanical wine, and faint licorice snap.',
-    method: 'Shake with ice into rinsed glass',
-    glass: 'Coupe',
-    ice: 'None (Served up)',
-    garnish: 'Lemon peel twist',
-    history: 'Immortalized by Harry Craddock in the 1930 Savoy Cocktail Book: "Four taken in swift succession will unrevive the corpse again."',
-    mistake: 'Forgetting the absinthe rinse, stripping the critical aromatic punch of the drink.'
-  },
-  {
-    id: 'gimlet',
-    name: 'Gimlet',
-    family: 'Sour',
-    spirit: 'Gin',
-    formula: '2 oz London Dry Gin, 3/4 oz Fresh Lime Juice, 3/4 oz Simple Syrup',
-    sensory: 'Crisp, razor-sharp citrus, juniper-heavy, and thirst-quenching.',
-    method: 'Shake with ice',
-    glass: 'Coupe or Rocks',
-    ice: 'Up or on the rocks',
-    garnish: 'Lime wheel',
-    history: 'Associated with British Royal Navy Surgeon Rear-Admiral Sir Thomas Gimlette to combat scurvy.',
-    mistake: 'Using overly processed artificial bottled cordials rather than vibrant fresh citrus.'
-  },
-  {
-    id: 'dark-n-stormy',
-    name: 'Dark ’n Stormy',
-    family: 'Highball',
-    spirit: 'Rum',
-    formula: '2 oz Goslings Black Seal Rum, 1/2 oz Lime Juice, 4 oz Ginger Beer',
-    sensory: 'Molasses sweetness, fiery ginger bite, and contrasting layered aesthetic.',
-    method: 'Build ginger beer over ice, float dark rum',
-    glass: 'Highball',
-    ice: 'Cubes',
-    garnish: 'Lime wedge',
-    history: 'A trademarked cocktail created in Bermuda by naval officers following WWI.',
-    mistake: 'Shaking the dark rum into the soda, ruining the stormy dark cloud visual layer.'
-  },
-  {
-    id: 'aperol-spritz',
-    name: 'Aperol Spritz',
-    family: 'Spritz',
-    spirit: 'Aperitivo',
-    formula: '3 oz Prosecco, 2 oz Aperol, 1 oz Sparkling Soda Water (3:2:1 Rule)',
-    sensory: 'Low alcohol, bittersweet gentian, bubbly effervescence, and bright orange.',
-    method: 'Build in glass over ice in order',
-    glass: 'Large Wine Glass',
-    ice: 'Plenty of cubes',
-    garnish: 'Juicy half orange slice & green olive',
-    history: 'Originated in Venice, Italy; codified the Austrian splash (spritzen) tradition into an aperitivo.',
-    mistake: 'Pouring the soda first and Prosecco last, preventing proper carbonation integration.'
-  },
-  {
-    id: 'bramble',
-    name: 'Bramble',
-    family: 'Modern Sour',
-    spirit: 'Gin',
-    formula: '1.5 oz Dry Gin, 3/4 oz Lemon Juice, 1/2 oz Simple, 1/2 oz Crème de Mûre float',
-    sensory: 'Tart lemon brightness bleeding into luscious dark blackberry liqueur.',
-    method: 'Shake base, pour over crushed ice, drizzle Mûre',
-    glass: 'Old Fashioned / Rocks',
-    ice: 'Packed crushed ice',
-    garnish: 'Fresh blackberry & lemon wheel',
-    history: 'Invented in 1984 by legendary bartender Dick Bradsell at Fred’s Club, Soho, London.',
-    mistake: 'Shaking the blackberry liqueur inside the shaker instead of bleeding it over crushed ice.'
+    formula: '1.5 oz Vodka, 1 oz Fresh Hot Espresso, 3/4 oz Coffee Liqueur, 1/4 oz Simple',
+    technique: 'Aerated high-velocity shake for thick crema foam',
+    glassware: 'Chilled Coupe',
+    ice: 'None (Double strained into chilled glass)',
+    garnish: 'Three coffee beans (Health, Wealth, Happiness)',
+    sensoryProfile: 'Deep roasted espresso crema, bittersweet cacao, and smooth alcohol warmth.',
+    origin: 'Fred’s Club, Soho, London (1983) created by legendary bartender Dick Bradsell.',
+    pitfall: 'Using stale cold drip dregs instead of fresh hot espresso kills the dense crema head.'
   }
 ];
 
 /* ==========================================================================
-   2. PROCEDURAL SYNTHESIZER (Web Audio API - Zero External Asset Lag)
+   2. DATA VALIDATION & INTEGRITY CHECKS
+   ========================================================================== */
+function validateCocktailDataset(dataset) {
+  if (!Array.isArray(dataset) || dataset.length !== 5) {
+    console.error('Data validation failed: Dataset must contain exactly 5 challenge records.');
+    return false;
+  }
+
+  const requiredKeys = ['id', 'name', 'spirit', 'family', 'formula', 'technique', 'glassware', 'garnish', 'sensoryProfile', 'origin', 'pitfall'];
+  const seenIds = new Set();
+
+  for (let i = 0; i < dataset.length; i++) {
+    const item = dataset[i];
+    if (!item || typeof item !== 'object') return false;
+
+    for (const key of requiredKeys) {
+      if (typeof item[key] !== 'string' || item[key].trim() === '') {
+        console.error(`Record ${i} missing required string field: ${key}`);
+        return false;
+      }
+    }
+
+    if (seenIds.has(item.id)) {
+      console.error(`Duplicate cocktail ID detected: ${item.id}`);
+      return false;
+    }
+    seenIds.add(item.id);
+  }
+  return true;
+}
+
+/* ==========================================================================
+   3. PROCEDURAL WEB AUDIO SYNTHESIZER (ZERO EXTERNAL ASSET DEPENDENCY)
    ========================================================================== */
 class AudioSynthesizer {
   constructor() {
     this.ctx = null;
-    this.muted = false;
+    this.muted = (localStorage.getItem('cocktail_sound_muted') === 'true');
   }
 
   init() {
@@ -373,27 +144,27 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Gentle tactile parchment/card snap
+    // Tactile card flip sound
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.08);
+    osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.07);
 
     filter.type = 'lowpass';
-    filter.frequency.value = 400;
+    filter.frequency.value = 450;
 
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.07);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.09);
+    osc.stop(this.ctx.currentTime + 0.08);
   }
 
   playMatch() {
@@ -401,23 +172,24 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Crystalline cocktail glass chime (Harmonic major chord: G5, B5, D6)
+    // Crystalline cocktail glass chime (G5, B5, D6)
     const freqs = [783.99, 987.77, 1174.66];
     freqs.forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + (idx * 0.04));
+      const startTime = this.ctx.currentTime + (idx * 0.04);
+      osc.frequency.setValueAtTime(freq, startTime);
 
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime + (idx * 0.04));
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.45);
+      gain.gain.setValueAtTime(0.12, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.42);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start(this.ctx.currentTime + (idx * 0.04));
-      osc.stop(this.ctx.currentTime + 0.5);
+      osc.start(startTime);
+      osc.stop(startTime + 0.45);
     });
   }
 
@@ -426,22 +198,22 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Soft non-punitive dual-wood tap
+    // Gentle barwood tap
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(110, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(75, this.ctx.currentTime + 0.12);
+    osc.frequency.setValueAtTime(115, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(70, this.ctx.currentTime + 0.1);
 
-    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.13);
+    osc.stop(this.ctx.currentTime + 0.11);
   }
 
   playVictory() {
@@ -449,64 +221,66 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Upward cocktail harp flourish
+    // Harmonious upward harp flourish
     const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
-    notes.forEach((freq, i) => {
+    notes.forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
       osc.type = 'triangle';
       osc.frequency.value = freq;
 
-      const startTime = this.ctx.currentTime + (i * 0.07);
+      const startTime = this.ctx.currentTime + (idx * 0.06);
       gain.gain.setValueAtTime(0.14, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.6);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.55);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start(startTime);
-      osc.stop(startTime + 0.65);
+      osc.stop(startTime + 0.6);
     });
+  }
+
+  toggle() {
+    this.muted = !this.muted;
+    localStorage.setItem('cocktail_sound_muted', this.muted);
+    if (!this.muted) {
+      this.playFlip();
+    }
+    return !this.muted;
   }
 }
 
 /* ==========================================================================
-   3. GAME ENGINE & STATE MANAGEMENT
+   4. CORE GAME ENGINE & STATE MANAGEMENT
    ========================================================================== */
-class CocktailMemoryGame {
-  constructor() {
+class CocktailCabinetGame {
+  constructor(dataset) {
+    this.dataset = dataset;
     this.synth = new AudioSynthesizer();
-    
-    // Config
-    this.difficultyConfig = {
-      easy: { pairs: 4, gridClass: 'grid-easy' },
-      medium: { pairs: 6, gridClass: 'grid-medium' },
-      hard: { pairs: 8, gridClass: 'grid-hard' }
-    };
-    this.currentDifficulty = 'easy';
 
-    // State
+    // 5-Challenge playthrough definition: 5 pairs = 10 cards total
+    this.totalPairs = 5;
     this.cards = [];
     this.firstCard = null;
     this.secondCard = null;
     this.isBoardLocked = false;
 
+    // Shift Metrics
+    this.currentTier = 'apprentice'; // apprentice | bartender | head
     this.matchedPairsCount = 0;
-    this.totalPairs = 4;
     this.score = 0;
     this.streak = 0;
     this.maxStreak = 0;
     this.totalMoves = 0;
-    this.mistakesCount = 0;
     this.elapsedSeconds = 0;
     this.timerInterval = null;
-    this.isGameActive = false;
-
-    // Session Memory (Discovered in this run)
+    this.isTimerRunning = false;
     this.sessionDrinks = new Set();
+    this.lastTriggerElement = null;
 
-    // DOM Elements
+    // Cache DOM Elements
     this.dom = {
       grid: document.getElementById('card-grid'),
       hudScore: document.getElementById('hud-score'),
@@ -515,6 +289,9 @@ class CocktailMemoryGame {
       hudPairs: document.getElementById('hud-pairs'),
       hudTimer: document.getElementById('hud-timer'),
       feedbackBanner: document.getElementById('live-feedback'),
+      feedbackIcon: document.getElementById('feedback-icon'),
+      feedbackHeading: document.getElementById('feedback-heading'),
+      feedbackText: document.getElementById('feedback-text'),
       tierPills: document.querySelectorAll('.tier-pill'),
       btnNewShift: document.getElementById('btn-new-shift'),
       btnPeek: document.getElementById('btn-peek'),
@@ -522,7 +299,7 @@ class CocktailMemoryGame {
       btnSound: document.getElementById('btn-sound'),
       soundIconOn: document.getElementById('sound-icon-on'),
       soundIconOff: document.getElementById('sound-icon-off'),
-      // Modals
+      // Victory Modal
       modalVictory: document.getElementById('modal-victory'),
       btnVicRestart: document.getElementById('btn-vic-restart'),
       btnVicCodex: document.getElementById('btn-vic-codex'),
@@ -531,7 +308,7 @@ class CocktailMemoryGame {
       vicAccuracy: document.getElementById('vic-accuracy'),
       vicStreak: document.getElementById('vic-streak'),
       vicCocktailsList: document.getElementById('vic-cocktails-list'),
-      // Codex
+      // Codex Drawer
       btnOpenCodex: document.getElementById('btn-open-codex'),
       modalCodex: document.getElementById('modal-codex'),
       btnCloseCodex: document.getElementById('btn-close-codex'),
@@ -544,38 +321,61 @@ class CocktailMemoryGame {
       btnCloseHandbookCta: document.getElementById('btn-close-handbook-cta')
     };
 
+    this.initSoundUI();
     this.bindEvents();
     this.renderCodex();
     this.startNewShift();
   }
 
   /* ------------------------------------------------------------------------
-     EVENT BINDINGS
+     INITIALIZATION & EVENT BINDINGS
      ------------------------------------------------------------------------ */
-  bindEvents() {
-    // Sound Toggle
-    this.dom.btnSound.addEventListener('click', () => this.toggleSound());
+  initSoundUI() {
+    if (this.synth.muted) {
+      this.dom.soundIconOn.classList.add('hidden');
+      this.dom.soundIconOff.classList.remove('hidden');
+      this.dom.btnSound.setAttribute('aria-pressed', 'false');
+    } else {
+      this.dom.soundIconOn.classList.remove('hidden');
+      this.dom.soundIconOff.classList.add('hidden');
+      this.dom.btnSound.setAttribute('aria-pressed', 'true');
+    }
+  }
 
-    // Difficulty Tabs
+  bindEvents() {
+    // Sound Button
+    this.dom.btnSound.addEventListener('click', () => {
+      const isEnabled = this.synth.toggle();
+      this.dom.btnSound.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+      if (isEnabled) {
+        this.dom.soundIconOn.classList.remove('hidden');
+        this.dom.soundIconOff.classList.add('hidden');
+      } else {
+        this.dom.soundIconOn.classList.add('hidden');
+        this.dom.soundIconOff.classList.remove('hidden');
+      }
+    });
+
+    // Tier Tabs
     this.dom.tierPills.forEach(pill => {
       pill.addEventListener('click', (e) => {
-        const diff = e.currentTarget.dataset.difficulty;
-        if (this.currentDifficulty === diff) return;
+        const tier = e.currentTarget.dataset.tier;
+        if (this.currentTier === tier) return;
         this.dom.tierPills.forEach(p => {
           p.classList.remove('active');
           p.setAttribute('aria-selected', 'false');
         });
         e.currentTarget.classList.add('active');
         e.currentTarget.setAttribute('aria-selected', 'true');
-        this.currentDifficulty = diff;
+        this.currentTier = tier;
         this.startNewShift();
       });
     });
 
-    // Control Buttons
+    // Main Control Buttons
     this.dom.btnNewShift.addEventListener('click', () => this.startNewShift());
     this.dom.btnPeek.addEventListener('click', () => this.executePeek());
-    this.dom.btnHowTo.addEventListener('click', () => this.openModal(this.dom.modalHandbook));
+    this.dom.btnHowTo.addEventListener('click', () => this.openModal(this.dom.modalHandbook, this.dom.btnHowTo));
 
     // Victory Dialog Actions
     this.dom.btnVicRestart.addEventListener('click', () => {
@@ -584,33 +384,33 @@ class CocktailMemoryGame {
     });
     this.dom.btnVicCodex.addEventListener('click', () => {
       this.closeModal(this.dom.modalVictory);
-      this.openModal(this.dom.modalCodex);
+      this.openModal(this.dom.modalCodex, this.dom.btnOpenCodex);
     });
 
     // Codex Handlers
-    this.dom.btnOpenCodex.addEventListener('click', () => this.openModal(this.dom.modalCodex));
+    this.dom.btnOpenCodex.addEventListener('click', () => this.openModal(this.dom.modalCodex, this.dom.btnOpenCodex));
     this.dom.btnCloseCodex.addEventListener('click', () => this.closeModal(this.dom.modalCodex));
     this.dom.codexSearch.addEventListener('input', (e) => this.filterCodex(e.target.value));
     this.dom.spiritFilters.addEventListener('click', (e) => {
-      if (e.target.classList.contains('filter-pill')) {
-        this.dom.spiritFilters.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-        e.target.classList.add('active');
-        this.filterCodex(this.dom.codexSearch.value, e.target.dataset.filter);
-      }
+      const btn = e.target.closest('.filter-pill');
+      if (!btn) return;
+      this.dom.spiritFilters.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      this.filterCodex(this.dom.codexSearch.value, btn.dataset.filter);
     });
 
     // Handbook close
     this.dom.btnCloseHandbook.addEventListener('click', () => this.closeModal(this.dom.modalHandbook));
     this.dom.btnCloseHandbookCta.addEventListener('click', () => this.closeModal(this.dom.modalHandbook));
 
-    // Close on backdrop tap
+    // Backdrop click dismiss
     [this.dom.modalVictory, this.dom.modalCodex, this.dom.modalHandbook].forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) this.closeModal(modal);
       });
     });
 
-    // Keyboard Access
+    // Escape Key Dismiss
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeModal(this.dom.modalVictory);
@@ -618,10 +418,19 @@ class CocktailMemoryGame {
         this.closeModal(this.dom.modalHandbook);
       }
     });
+
+    // Touch audio unlock primer
+    const unlockAudio = () => {
+      this.synth.init();
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    };
+    document.addEventListener('touchstart', unlockAudio, { passive: true });
+    document.addEventListener('click', unlockAudio, { passive: true });
   }
 
   /* ------------------------------------------------------------------------
-     GAME SETUP & LOOP
+     GAME LIFECYCLE & 5-PLAYTHROUGH SHUFFLE
      ------------------------------------------------------------------------ */
   startNewShift() {
     this.resetTimer();
@@ -633,19 +442,11 @@ class CocktailMemoryGame {
     this.streak = 0;
     this.maxStreak = 0;
     this.totalMoves = 0;
-    this.mistakesCount = 0;
     this.sessionDrinks.clear();
 
-    const config = this.difficultyConfig[this.currentDifficulty];
-    this.totalPairs = config.pairs;
-
-    // Pick random cocktails from database
-    const shuffledPool = [...COCKTAILS_DB].sort(() => 0.5 - Math.random());
-    const selectedCocktails = shuffledPool.slice(0, this.totalPairs);
-
-    // Build pair cards: One Cocktail Identity Card, One Spec Card
+    // Assemble exactly 10 cards (5 Identity cards, 5 Spec cards)
     const deck = [];
-    selectedCocktails.forEach(cocktail => {
+    this.dataset.forEach(cocktail => {
       deck.push({
         id: `${cocktail.id}-name`,
         cocktailId: cocktail.id,
@@ -660,16 +461,13 @@ class CocktailMemoryGame {
       });
     });
 
-    // Shuffle cards with Fisher-Yates
+    // Shuffle cards with Fisher-Yates algorithm
     this.cards = this.shuffleArray(deck);
-
-    // Apply grid class & render
-    this.dom.grid.className = `card-grid ${config.gridClass}`;
     this.renderGrid();
     this.updateHUD();
 
-    this.setFeedback('idle', 'Bar Station Active', 'Select any card to uncover cocktail title or recipe specification.');
-    this.startTimer();
+    const tierName = this.currentTier.charAt(0).toUpperCase() + this.currentTier.slice(1);
+    this.setFeedback('idle', `${tierName} Station Ready`, 'Tap any card to reveal classic cocktail title or structural spec.');
   }
 
   shuffleArray(arr) {
@@ -682,7 +480,7 @@ class CocktailMemoryGame {
   }
 
   /* ------------------------------------------------------------------------
-     RENDER CARDS
+     GRID RENDERING (10 CARDS)
      ------------------------------------------------------------------------ */
   renderGrid() {
     this.dom.grid.innerHTML = '';
@@ -692,6 +490,8 @@ class CocktailMemoryGame {
       const cardEl = document.createElement('button');
       cardEl.className = 'memory-card';
       cardEl.dataset.index = idx;
+      cardEl.dataset.cocktailId = cardData.cocktailId;
+      cardEl.dataset.type = cardData.type;
       cardEl.setAttribute('aria-label', `Card ${idx + 1}: Face down`);
       cardEl.setAttribute('tabindex', '0');
 
@@ -701,10 +501,10 @@ class CocktailMemoryGame {
       backFace.innerHTML = `
         <div class="back-pattern-frame">
           <div class="back-crest">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
               <path d="M8 22h8M12 15v7M19 3l-7 8-7-8h14zM5 3l7 7 7-7"/>
             </svg>
-            <span class="back-crest-text">SPEC</span>
+            <span class="back-crest-text">BAR SPEC</span>
           </div>
         </div>
       `;
@@ -717,31 +517,31 @@ class CocktailMemoryGame {
         frontFace.innerHTML = `
           <div class="card-top-tag">
             <span>Classic Drink</span>
-            <span>🍸</span>
+            <span aria-hidden="true">🍸</span>
           </div>
-          <h4 class="cocktail-name">${cardData.cocktail.name}</h4>
+          <h3 class="cocktail-name">${cardData.cocktail.name}</h3>
           <div class="cocktail-meta-group">
             <span class="mini-pill">${cardData.cocktail.spirit}</span>
             <span class="mini-pill">${cardData.cocktail.family}</span>
-            <span class="mini-pill">${cardData.cocktail.glass}</span>
+            <span class="mini-pill">${cardData.cocktail.glassware}</span>
           </div>
         `;
       } else {
         frontFace.innerHTML = `
           <div class="card-top-tag">
             <span>Formula &amp; Method</span>
-            <span>📖</span>
+            <span aria-hidden="true">📖</span>
           </div>
           <div class="spec-formula">${cardData.cocktail.formula}</div>
-          <div class="spec-sensory">"${cardData.cocktail.sensory}"</div>
-          <span class="spec-method-badge">${cardData.cocktail.method}</span>
+          <div class="spec-sensory">"${cardData.cocktail.sensoryProfile}"</div>
+          <span class="spec-method-badge">${cardData.cocktail.technique}</span>
         `;
       }
 
       cardEl.appendChild(backFace);
       cardEl.appendChild(frontFace);
 
-      // Event Listeners
+      // Card Event Listeners
       cardEl.addEventListener('click', () => this.handleCardSelection(cardEl, cardData));
       cardEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -757,22 +557,25 @@ class CocktailMemoryGame {
   }
 
   /* ------------------------------------------------------------------------
-     INTERACTION & MATCH RESOLUTION
+     INTERACTION & MATCH EVALUATION
      ------------------------------------------------------------------------ */
   handleCardSelection(cardEl, cardData) {
-    if (this.synth) this.synth.init();
-
-    // Guard conditions
     if (this.isBoardLocked) return;
     if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
 
-    // Flip Card
+    // Start timer on initial card touch
+    if (!this.isTimerRunning) {
+      this.startTimer();
+    }
+
+    // Flip chosen card
     this.flipCard(cardEl, cardData);
     this.synth.playFlip();
 
     if (!this.firstCard) {
       this.firstCard = { el: cardEl, data: cardData };
-      this.setFeedback('idle', 'Card Inspected', `Uncovered: ${cardData.cocktail.name} (${cardData.type === 'identity' ? 'Identity' : 'Formula'}). Select a partner.`);
+      const cardTypeLabel = cardData.type === 'identity' ? 'Identity Card' : 'Formula Spec';
+      this.setFeedback('idle', 'Card Inspected', `Uncovered: ${cardData.cocktail.name} (${cardTypeLabel}). Select a partner card.`);
       return;
     }
 
@@ -781,7 +584,7 @@ class CocktailMemoryGame {
     this.totalMoves++;
     this.isBoardLocked = true;
 
-    // Evaluate pair
+    // Evaluate matching rules
     const isMatch = (this.firstCard.data.cocktailId === this.secondCard.data.cocktailId) &&
                     (this.firstCard.data.type !== this.secondCard.data.type);
 
@@ -794,7 +597,10 @@ class CocktailMemoryGame {
 
   flipCard(cardEl, cardData) {
     cardEl.classList.add('flipped');
-    cardEl.setAttribute('aria-label', `${cardData.type === 'identity' ? cardData.cocktail.name : cardData.cocktail.formula}`);
+    const label = cardData.type === 'identity'
+      ? `${cardData.cocktail.name}, ${cardData.cocktail.spirit} based ${cardData.cocktail.family}`
+      : `Spec for ${cardData.cocktail.name}: ${cardData.cocktail.formula}`;
+    cardEl.setAttribute('aria-label', label);
   }
 
   unflipCard(cardEl) {
@@ -807,55 +613,64 @@ class CocktailMemoryGame {
     const cocktail = this.firstCard.data.cocktail;
     this.sessionDrinks.add(cocktail);
 
-    // Visual State
+    // Apply matched state
     this.firstCard.el.classList.add('matched');
     this.secondCard.el.classList.add('matched');
+    this.firstCard.el.setAttribute('aria-disabled', 'true');
+    this.secondCard.el.setAttribute('aria-disabled', 'true');
 
-    // Score & Multiplier Calculations
+    // Score & Multiplier Calculation
     this.streak++;
     if (this.streak > this.maxStreak) this.maxStreak = this.streak;
     const multiplier = Math.min(3.0, 1 + (this.streak - 1) * 0.5);
 
-    const basePoints = 250;
+    const basePoints = this.currentTier === 'head' ? 350 : 250;
     const earnedPoints = Math.round(basePoints * multiplier);
     this.score += earnedPoints;
     this.matchedPairsCount++;
 
     this.updateHUD();
 
-    // Contextual Educational Feedback
-    this.setFeedback('correct', `Matched: ${cocktail.name}`, `Technique: ${cocktail.method} • Serve: ${cocktail.glass} with ${cocktail.garnish}.`);
+    // Educational technique announcement
+    this.setFeedback(
+      'correct',
+      `Matched: ${cocktail.name}`,
+      `${cocktail.technique} • Serve in ${cocktail.glassware} with ${cocktail.garnish}.`
+    );
 
     this.resetSelection();
 
-    // Check Victory
+    // Check complete shift condition (all 5 pairs matched)
     if (this.matchedPairsCount === this.totalPairs) {
-      setTimeout(() => this.concludeShift(), 650);
+      setTimeout(() => this.concludeShift(), 600);
     }
   }
 
   handleMatchFailure() {
     this.synth.playMismatch();
     this.streak = 0;
-    this.mistakesCount++;
     this.updateHUD();
 
     const c1 = this.firstCard.data.cocktail;
     const c2 = this.secondCard.data.cocktail;
 
-    // Smart Bartender Near-Miss Diagnostics
+    // Intelligent Bartender Diagnostic Feedback
     let clue = '';
-    if (c1.spirit === c2.spirit) {
-      clue = `Both feature ${c1.spirit}, but differ in method (${c1.method} vs ${c2.method}).`;
+    if (this.firstCard.data.type === this.secondCard.data.type) {
+      clue = this.firstCard.data.type === 'identity'
+        ? 'Both are Drink Titles! Remember to pair a Drink Title with its Recipe Spec card.'
+        : 'Both are Formula Specs! Pair one Recipe Spec to its corresponding Cocktail Name.';
+    } else if (c1.spirit === c2.spirit) {
+      clue = `Both drinks highlight ${c1.spirit}, but differ in method (${c1.technique} vs ${c2.technique}).`;
     } else if (c1.family === c2.family) {
-      clue = `Both belong to the ${c1.family} style, but utilize different base spirits.`;
+      clue = `Both belong to the ${c1.family} style, but contrast in base spirits (${c1.spirit} vs ${c2.spirit}).`;
     } else {
-      clue = `Distinct spirits (${c1.spirit} vs ${c2.spirit}) and different glassware (${c1.glass} vs ${c2.glass}).`;
+      clue = `${c1.name} uses ${c1.spirit} in a ${c1.glassware}, while ${c2.name} uses ${c2.spirit}.`;
     }
 
     this.setFeedback('mismatch', 'Recipe Mismatch', clue);
 
-    // Card Shake
+    // Card shake animation
     this.firstCard.el.classList.add('shake');
     this.secondCard.el.classList.add('shake');
 
@@ -869,7 +684,7 @@ class CocktailMemoryGame {
         this.unflipCard(this.secondCard.el);
       }
       this.resetSelection();
-    }, 1150);
+    }, 1100);
   }
 
   resetSelection() {
@@ -879,7 +694,7 @@ class CocktailMemoryGame {
   }
 
   /* ------------------------------------------------------------------------
-     STATION PEEK (Tactical Assist)
+     STATION GLANCE (TACTICAL ASSIST)
      ------------------------------------------------------------------------ */
   executePeek() {
     if (this.isBoardLocked || this.matchedPairsCount === this.totalPairs) return;
@@ -890,28 +705,35 @@ class CocktailMemoryGame {
     const unmatchedCards = Array.from(this.dom.grid.querySelectorAll('.memory-card:not(.matched)'));
     unmatchedCards.forEach(c => c.classList.add('flipped'));
 
-    this.setFeedback('idle', 'Station Glanced', 'The bar rail is momentarily revealed (-150 pts).');
+    this.setFeedback('idle', 'Station Glanced', 'The bar rail is momentarily uncovered (-150 pts penalty).');
 
     setTimeout(() => {
       unmatchedCards.forEach(c => c.classList.remove('flipped'));
       this.isBoardLocked = false;
-    }, 1200);
+    }, 1150);
   }
 
   /* ------------------------------------------------------------------------
-     TIMER & HUD
+     TIMER & HUD MANAGEMENT
      ------------------------------------------------------------------------ */
   startTimer() {
-    this.isGameActive = true;
-    this.elapsedSeconds = 0;
+    this.isTimerRunning = true;
+    if (this.timerInterval) clearInterval(this.timerInterval);
     this.timerInterval = setInterval(() => {
       this.elapsedSeconds++;
       this.renderTime();
+
+      // Head Bartender Rush Hour feedback
+      if (this.currentTier === 'head' && this.elapsedSeconds >= 90 && this.matchedPairsCount < this.totalPairs) {
+        this.setFeedback('mismatch', 'Rush Hour Expired', 'Time exceeded 90s! Finish the rail to complete the shift.');
+      }
     }, 1000);
   }
 
   resetTimer() {
     if (this.timerInterval) clearInterval(this.timerInterval);
+    this.timerInterval = null;
+    this.isTimerRunning = false;
     this.elapsedSeconds = 0;
     this.renderTime();
   }
@@ -933,9 +755,9 @@ class CocktailMemoryGame {
   setFeedback(type, heading, text) {
     this.dom.feedbackBanner.className = `feedback-banner ${type}`;
     const icon = type === 'correct' ? '✨' : (type === 'mismatch' ? '⚠️' : '💡');
-    this.dom.feedbackBanner.querySelector('.feedback-icon').textContent = icon;
-    this.dom.feedbackBanner.querySelector('.feedback-heading').textContent = heading;
-    this.dom.feedbackBanner.querySelector('.feedback-text').textContent = text;
+    this.dom.feedbackIcon.textContent = icon;
+    this.dom.feedbackHeading.textContent = heading;
+    this.dom.feedbackText.textContent = text;
   }
 
   /* ------------------------------------------------------------------------
@@ -945,27 +767,26 @@ class CocktailMemoryGame {
     if (this.timerInterval) clearInterval(this.timerInterval);
     this.synth.playVictory();
 
-    // Time & Accuracy calculation
     const mins = Math.floor(this.elapsedSeconds / 60).toString().padStart(2, '0');
     const secs = (this.elapsedSeconds % 60).toString().padStart(2, '0');
     const formattedTime = `${mins}:${secs}`;
-    
+
     const accuracy = this.totalMoves > 0 
-      ? Math.round((this.totalPairs / this.totalMoves) * 100) 
+      ? Math.min(100, Math.round((this.totalPairs / this.totalMoves) * 100)) 
       : 100;
 
-    // Populate modal stats
+    // Populate modal statistics
     this.dom.vicScore.textContent = this.score.toLocaleString();
     this.dom.vicTime.textContent = formattedTime;
     this.dom.vicAccuracy.textContent = `${accuracy}%`;
     this.dom.vicStreak.textContent = `${this.maxStreak}x`;
 
-    // Render recap drink badges
+    // Render 5 Mastered Cocktail badges
     this.dom.vicCocktailsList.innerHTML = '';
-    this.sessionDrinks.forEach(drink => {
+    this.dataset.forEach(drink => {
       const badge = document.createElement('span');
       badge.className = 'recap-badge';
-      badge.innerHTML = `<span>🍸</span> <strong>${drink.name}</strong> (${drink.spirit})`;
+      badge.innerHTML = `<span aria-hidden="true">🍸</span> <strong>${drink.name}</strong> (${drink.spirit})`;
       this.dom.vicCocktailsList.appendChild(badge);
     });
 
@@ -973,9 +794,9 @@ class CocktailMemoryGame {
   }
 
   /* ------------------------------------------------------------------------
-     CABINET CODEX SYSTEM
+     CABINET CODEX VIEWER
      ------------------------------------------------------------------------ */
-  renderCodex(filteredList = COCKTAILS_DB) {
+  renderCodex(filteredList = this.dataset) {
     this.dom.codexList.innerHTML = '';
     if (filteredList.length === 0) {
       this.dom.codexList.innerHTML = `
@@ -998,16 +819,16 @@ class CocktailMemoryGame {
         <div class="codex-drink-spec">${item.formula}</div>
         <div class="codex-grid-meta">
           <div><strong>Spirit:</strong> ${item.spirit}</div>
-          <div><strong>Method:</strong> ${item.method}</div>
-          <div><strong>Glass:</strong> ${item.glass}</div>
+          <div><strong>Glassware:</strong> ${item.glassware}</div>
           <div><strong>Ice:</strong> ${item.ice}</div>
           <div><strong>Garnish:</strong> ${item.garnish}</div>
+          <div><strong>Technique:</strong> ${item.technique}</div>
         </div>
         <div class="codex-detail-row">
-          <strong>Historical Note:</strong> ${item.history}
+          <strong>Historical Note:</strong> ${item.origin}
         </div>
-        <div class="codex-detail-row" style="color: #d19a86;">
-          <strong>Pitfall Avoidance:</strong> ${item.mistake}
+        <div class="codex-detail-row" style="color: #df9782;">
+          <strong>Pitfall Avoidance:</strong> ${item.pitfall}
         </div>
       `;
       fragment.appendChild(card);
@@ -1018,21 +839,21 @@ class CocktailMemoryGame {
 
   filterCodex(query = '', spiritFilter = 'all') {
     const q = query.toLowerCase().trim();
-    let currentFilter = spiritFilter;
-    if (currentFilter === 'all') {
+    let currentSpirit = spiritFilter;
+    if (currentSpirit === 'all') {
       const activePill = this.dom.spiritFilters.querySelector('.filter-pill.active');
-      currentFilter = activePill ? activePill.dataset.filter : 'all';
+      currentSpirit = activePill ? activePill.dataset.filter : 'all';
     }
 
-    const filtered = COCKTAILS_DB.filter(drink => {
-      const matchesSearch = !q || 
+    const filtered = this.dataset.filter(drink => {
+      const matchesSearch = !q ||
         drink.name.toLowerCase().includes(q) ||
         drink.spirit.toLowerCase().includes(q) ||
         drink.formula.toLowerCase().includes(q) ||
         drink.family.toLowerCase().includes(q);
 
-      const matchesSpirit = currentFilter === 'all' || 
-        drink.spirit.toLowerCase() === currentFilter.toLowerCase();
+      const matchesSpirit = currentSpirit === 'all' ||
+        drink.spirit.toLowerCase() === currentSpirit.toLowerCase();
 
       return matchesSearch && matchesSpirit;
     });
@@ -1041,34 +862,40 @@ class CocktailMemoryGame {
   }
 
   /* ------------------------------------------------------------------------
-     MODAL CONTROLS & UTILITIES
+     MODAL & DIALOG ACCESSIBILITY CONTROLS
      ------------------------------------------------------------------------ */
-  openModal(modalEl) {
+  openModal(modalEl, triggerBtn = null) {
+    if (triggerBtn) {
+      this.lastTriggerElement = triggerBtn;
+      triggerBtn.setAttribute('aria-expanded', 'true');
+    }
     modalEl.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+
+    // Focus first interactive control in modal
+    const focusable = modalEl.querySelector('button, [href], input, [tabindex="0"]');
+    if (focusable) focusable.focus();
   }
 
   closeModal(modalEl) {
     modalEl.classList.add('hidden');
     document.body.style.overflow = '';
-  }
-
-  toggleSound() {
-    this.synth.muted = !this.synth.muted;
-    if (this.synth.muted) {
-      this.dom.soundIconOn.classList.add('hidden');
-      this.dom.soundIconOff.classList.remove('hidden');
-    } else {
-      this.dom.soundIconOn.classList.remove('hidden');
-      this.dom.soundIconOff.classList.add('hidden');
-      this.synth.playFlip();
+    if (this.lastTriggerElement) {
+      this.lastTriggerElement.setAttribute('aria-expanded', 'false');
+      this.lastTriggerElement.focus();
+      this.lastTriggerElement = null;
     }
   }
 }
 
 /* ==========================================================================
-   INITIALIZATION
+   5. APPLICATION INITIALIZATION
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  window.cocktailGame = new CocktailMemoryGame();
+  const isValid = validateCocktailDataset(COCKTAILS_DB);
+  if (isValid) {
+    window.cocktailCabinetApp = new CocktailCabinetGame(COCKTAILS_DB);
+  } else {
+    console.error('Application aborted: cocktail dataset did not pass integrity validation.');
+  }
 });
