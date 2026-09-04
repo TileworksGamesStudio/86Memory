@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The Cocktail Cabinet — Knowledge Match</title>
+  <meta name="description" content="A tactile cocktail knowledge matching game. Match classics, recipes, and bartender technique to master the craft.">
+  <meta name="theme-color" content="#1a120c">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Atmospheric overlay -->
+  <div class="bg-vignette" aria-hidden="true"></div>
+
+  <!-- App Wrapper -->
+  <div id="app" class="app-layout">
+    
+    <!-- Header / Status Bar -->
+    <header class="bar-header">
+      <div class="brand-group">
+        <div class="brand-crest" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 22h8M12 15v7M19 3l-7 8-7-8h14zM5 3l7 7 7-7"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-title">The Cocktail Cabinet</h1>
+          <span class="brand-subtitle">Bartender Memory &amp; Codex</span>
+        </div>
+      </div>
+
+      <!-- Action Toggles -->
+      <div class="header-controls">
+        <button id="btn-sound" class="icon-btn" aria-label="Toggle Sound Effects" title="Toggle Sound">
+          <svg id="sound-icon-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg id="sound-icon-off" class="hidden" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M16 9l6 6M22 9l-6 6"></path>
+          </svg>
+        </button>
+        <button id="btn-open-codex" class="btn btn-secondary btn-sm" aria-label="Open Cocktail Cabinet Codex">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span>Cabinet Codex</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Shift HUD / Metrics bar -->
+    <div class="hud-bar">
+      <!-- Tier Selector -->
+      <div class="tier-selector" role="tablist" aria-label="Game Difficulty Tiers">
+        <button class="tier-pill active" data-difficulty="easy" role="tab" aria-selected="true" id="tab-easy">
+          Apprentice <span class="pill-badge">8 Cards</span>
+        </button>
+        <button class="tier-pill" data-difficulty="medium" role="tab" aria-selected="false" id="tab-medium">
+          Bartender <span class="pill-badge">12 Cards</span>
+        </button>
+        <button class="tier-pill" data-difficulty="hard" role="tab" aria-selected="false" id="tab-hard">
+          Head Bartender <span class="pill-badge">16 Cards</span>
+        </button>
+      </div>
+
+      <!-- Live Counters -->
+      <div class="metrics-strip">
+        <div class="metric-item">
+          <span class="metric-label">Shift Score</span>
+          <span class="metric-value" id="hud-score">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Streak</span>
+          <div class="streak-wrapper">
+            <span class="metric-value text-gold" id="hud-streak">0</span>
+            <span class="multiplier-badge" id="hud-multiplier">1.0x</span>
+          </div>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Matched</span>
+          <span class="metric-value" id="hud-pairs">0 / 0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Timer</span>
+          <span class="metric-value font-mono" id="hud-timer">00:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Educational Banner / Feedback -->
+    <section class="feedback-anchor" aria-live="polite" aria-atomic="true">
+      <div id="live-feedback" class="feedback-banner idle">
+        <div class="feedback-icon" aria-hidden="true">💡</div>
+        <div class="feedback-body">
+          <span class="feedback-heading">Bar Station Ready</span>
+          <p class="feedback-text">Tap cards to link classic cocktail names to their structural recipes, technique, and specs.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card Grid Playfield -->
+    <main class="playfield-container">
+      <div id="card-grid" class="card-grid grid-easy" role="region" aria-label="Memory Matching Grid">
+        <!-- Cards dynamically injected via script.js -->
+      </div>
+    </main>
+
+    <!-- Bottom Command Rail -->
+    <footer class="command-rail">
+      <div class="rail-left">
+        <button id="btn-peek" class="btn btn-tertiary" title="Quick glance at the cards (-200 pts)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span>Station Peek</span>
+        </button>
+        <button id="btn-how-to" class="btn btn-tertiary">
+          <span>Bar Handbook</span>
+        </button>
+      </div>
+
+      <div class="rail-right">
+        <button id="btn-new-shift" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          <span>Deal New Deck</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- MODAL: Shift Complete / Victory -->
+  <div id="modal-victory" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+    <div class="modal-window victory-card">
+      <div class="victory-header">
+        <div class="victory-medal" aria-hidden="true">🍸</div>
+        <span class="badge-tag">Shift Completed</span>
+        <h2 id="victory-title" class="victory-heading">Outstanding Service</h2>
+        <p class="victory-sub" id="victory-subtext">The tickets are cleared with exceptional cocktail precision.</p>
+      </div>
+
+      <div class="stats-matrix">
+        <div class="stat-cell">
+          <span class="stat-label">Final Score</span>
+          <span class="stat-val text-gold" id="vic-score">0</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Clear Time</span>
+          <span class="stat-val font-mono" id="vic-time">00:00</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Accuracy</span>
+          <span class="stat-val" id="vic-accuracy">100%</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Peak Streak</span>
+          <span class="stat-val text-accent" id="vic-streak">0</span>
+        </div>
+      </div>
+
+      <!-- Drinks Mastered in this round -->
+      <div class="victory-recap">
+        <h3 class="recap-title">Cocktails Prepared in This Shift</h3>
+        <div id="vic-cocktails-list" class="recap-list">
+          <!-- Dynamic drink badges -->
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-vic-codex" class="btn btn-secondary">Review in Codex</button>
+        <button id="btn-vic-restart" class="btn btn-primary">Deal Next Round</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAWER: Cocktail Cabinet Codex -->
+  <div id="modal-codex" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="codex-title">
+    <div class="modal-window codex-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <h2 id="codex-title" class="drawer-title">The Bartender's Codex</h2>
+          <p class="drawer-sub">Master specifications, structural balances, origins &amp; common pitfalls.</p>
+        </div>
+        <button id="btn-close-codex" class="icon-btn" aria-label="Close Codex">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Codex Search & Filter Toolbar -->
+      <div class="codex-filter-bar">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="search" id="codex-search" placeholder="Search cocktail, spirit, or style..." autocomplete="off">
+        </div>
+        <div class="spirit-filter-pills" id="spirit-filters">
+          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill" data-filter="Gin">Gin</button>
+          <button class="filter-pill" data-filter="Whiskey">Whiskey</button>
+          <button class="filter-pill" data-filter="Rum">Rum</button>
+          <button class="filter-pill" data-filter="Tequila">Agave</button>
+          <button class="filter-pill" data-filter="Brandy">Brandy</button>
+          <button class="filter-pill" data-filter="Vodka">Vodka</button>
+        </div>
+      </div>
+
+      <!-- Codex Content Grid -->
+      <div id="codex-entries-list" class="codex-entries-list">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Handbook / Instructions -->
+  <div id="modal-handbook" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="handbook-title">
+    <div class="modal-window handbook-card">
+      <div class="drawer-header">
+        <h2 id="handbook-title" class="drawer-title">Station Protocol &amp; Rules</h2>
+        <button id="btn-close-handbook" class="icon-btn" aria-label="Close Handbook">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="handbook-content">
+        <div class="handbook-section">
+          <h3>The Core Mechanics</h3>
+          <p>You are matching <strong>Cocktail Identity Cards</strong> with their corresponding <strong>Formula &amp; Sensory Spec Cards</strong>.</p>
+        </div>
+        <div class="handbook-section">
+          <h3>Card Types</h3>
+          <div class="rule-card-sample">
+            <div class="sample-box name-sample">
+              <strong>Cocktail Title</strong>
+              <span>Spirit • Family • Glassware</span>
+            </div>
+            <div class="sample-divider">↔</div>
+            <div class="sample-box spec-sample">
+              <strong>Tasting Profile &amp; Spec</strong>
+              <span>Key ingredients, ratio, preparation</span>
+            </div>
+          </div>
+        </div>
+        <div class="handbook-section">
+          <h3>Educational Near-Miss Feedback</h3>
+          <p>When you select two mismatched cards, our bar station engine diagnoses the relationship (e.g. <em>"Both are shaken sours, but one uses Rye Whiskey while the other uses Cuban Rum"</em>). Use these clues to locate the true matches.</p>
+        </div>
+        <div class="handbook-section">
+          <h3>Multiplier Streaks</h3>
+          <p>Consecutive correct pairings build your tip streak up to <strong>3.0x</strong>. Mistakes reset the multiplier, but teach you crucial cocktail structure.</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-close-handbook-cta" class="btn btn-primary">Return to the Rail</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
