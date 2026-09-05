@@ -1,12 +1,12 @@
 /**
  * THE COCKTAIL CABINET — MASTER BARTENDER MEMORY & CODEX
- * Production Game Engine, Synthesizer & Curated 5-Playthrough Challenge Dataset
+ * Production Game Engine, Synthesizer, Storage Persistence & Screen Navigation Engine
  */
 
 'use strict';
 
 /* ==========================================================================
-   1. IN-SCRIPT COCKTAIL CONTENT DATASET (EXACTLY 5 PLAYABLE EXAMPLES)
+   1. COCKTAIL DATASET (EXACTLY 5 PLAYABLE CLASSIC EXAMPLES)
    ========================================================================== */
 const COCKTAILS_DB = [
   {
@@ -87,52 +87,122 @@ const COCKTAILS_DB = [
 ];
 
 /* ==========================================================================
-   2. DATA VALIDATION & INTEGRITY CHECKS
+   2. DATA VALIDATION
    ========================================================================== */
 function validateCocktailDataset(dataset) {
-  if (!Array.isArray(dataset) || dataset.length !== 5) {
-    console.error('Data validation failed: Dataset must contain exactly 5 challenge records.');
-    return false;
-  }
-
-  const requiredKeys = ['id', 'name', 'spirit', 'family', 'formula', 'technique', 'glassware', 'garnish', 'sensoryProfile', 'origin', 'pitfall'];
+  if (!Array.isArray(dataset) || dataset.length !== 5) return false;
+  const reqKeys = ['id', 'name', 'spirit', 'family', 'formula', 'technique', 'glassware', 'garnish', 'sensoryProfile', 'origin', 'pitfall'];
   const seenIds = new Set();
 
-  for (let i = 0; i < dataset.length; i++) {
-    const item = dataset[i];
+  for (const item of dataset) {
     if (!item || typeof item !== 'object') return false;
-
-    for (const key of requiredKeys) {
-      if (typeof item[key] !== 'string' || item[key].trim() === '') {
-        console.error(`Record ${i} missing required string field: ${key}`);
-        return false;
-      }
+    for (const k of reqKeys) {
+      if (typeof item[k] !== 'string' || item[k].trim() === '') return false;
     }
-
-    if (seenIds.has(item.id)) {
-      console.error(`Duplicate cocktail ID detected: ${item.id}`);
-      return false;
-    }
+    if (seenIds.has(item.id)) return false;
     seenIds.add(item.id);
   }
   return true;
 }
 
 /* ==========================================================================
-   3. PROCEDURAL WEB AUDIO SYNTHESIZER (ZERO EXTERNAL ASSET DEPENDENCY)
+   3. PERSISTENCE MANAGER (LOCALSTORAGE)
+   ========================================================================== */
+class PersistenceManager {
+  constructor() {
+    this.STORAGE_KEY = 'cocktail_cabinet_v1';
+    this.state = this.loadDefaults();
+    this.init();
+  }
+
+  loadDefaults() {
+    return {
+      version: 1,
+      settings: {
+        soundMuted: false,
+        selectedTier: 'apprentice'
+      },
+      stats: {
+        highScore: 0,
+        bestStreak: 0,
+        bestTimeSeconds: 0,
+        shiftsCompleted: 0,
+        masteredDrinkIds: []
+      }
+    };
+  }
+
+  init() {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.version === 1) {
+          this.state = {
+            version: 1,
+            settings: { ...this.loadDefaults().settings, ...parsed.settings },
+            stats: { ...this.loadDefaults().stats, ...parsed.stats }
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to parse saved state; reverting to defaults.', err);
+      this.state = this.loadDefaults();
+    }
+    this.save();
+  }
+
+  save() {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.state));
+    } catch (err) {
+      console.warn('Could not write to localStorage:', err);
+    }
+  }
+
+  get settings() { return this.state.settings; }
+  get stats() { return this.state.stats; }
+
+  updateSettings(patch) {
+    this.state.settings = { ...this.state.settings, ...patch };
+    this.save();
+  }
+
+  recordShiftResult(score, maxStreak, timeSec, drinkIds) {
+    const s = this.state.stats;
+    s.shiftsCompleted++;
+    if (score > s.highScore) s.highScore = score;
+    if (maxStreak > s.bestStreak) s.bestStreak = maxStreak;
+    if (s.bestTimeSeconds === 0 || timeSec < s.bestTimeSeconds) s.bestTimeSeconds = timeSec;
+
+    const set = new Set(s.masteredDrinkIds);
+    drinkIds.forEach(id => set.add(id));
+    s.masteredDrinkIds = Array.from(set);
+
+    this.save();
+  }
+
+  resetAllData() {
+    this.state = this.loadDefaults();
+    this.save();
+  }
+}
+
+/* ==========================================================================
+   4. PROCEDURAL WEB AUDIO SYNTHESIZER
    ========================================================================== */
 class AudioSynthesizer {
-  constructor() {
+  constructor(persistence) {
+    this.persistence = persistence;
     this.ctx = null;
-    this.muted = (localStorage.getItem('cocktail_sound_muted') === 'true');
   }
+
+  get muted() { return this.persistence.settings.soundMuted; }
 
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
+      if (AudioCtx) this.ctx = new AudioCtx();
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -144,25 +214,17 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Tactile card flip sound
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(160, this.ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.07);
 
-    filter.type = 'lowpass';
-    filter.frequency.value = 450;
-
     gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.07);
 
-    osc.connect(filter);
-    filter.connect(gain);
+    osc.connect(gain);
     gain.connect(this.ctx.destination);
-
     osc.start();
     osc.stop(this.ctx.currentTime + 0.08);
   }
@@ -172,12 +234,9 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Crystalline cocktail glass chime (G5, B5, D6)
-    const freqs = [783.99, 987.77, 1174.66];
-    freqs.forEach((freq, idx) => {
+    [783.99, 987.77, 1174.66].forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
       osc.type = 'sine';
       const startTime = this.ctx.currentTime + (idx * 0.04);
       osc.frequency.setValueAtTime(freq, startTime);
@@ -187,7 +246,6 @@ class AudioSynthesizer {
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-
       osc.start(startTime);
       osc.stop(startTime + 0.45);
     });
@@ -198,10 +256,8 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Gentle barwood tap
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(115, this.ctx.currentTime);
     osc.frequency.linearRampToValueAtTime(70, this.ctx.currentTime + 0.1);
@@ -211,7 +267,6 @@ class AudioSynthesizer {
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
-
     osc.start();
     osc.stop(this.ctx.currentTime + 0.11);
   }
@@ -221,12 +276,9 @@ class AudioSynthesizer {
     this.init();
     if (!this.ctx) return;
 
-    // Harmonious upward harp flourish
-    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
-    notes.forEach((freq, idx) => {
+    [523.25, 659.25, 783.99, 1046.50, 1318.51].forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
       osc.type = 'triangle';
       osc.frequency.value = freq;
 
@@ -236,31 +288,28 @@ class AudioSynthesizer {
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-
       osc.start(startTime);
       osc.stop(startTime + 0.6);
     });
   }
 
   toggle() {
-    this.muted = !this.muted;
-    localStorage.setItem('cocktail_sound_muted', this.muted);
-    if (!this.muted) {
-      this.playFlip();
-    }
-    return !this.muted;
+    const nextMuted = !this.muted;
+    this.persistence.updateSettings({ soundMuted: nextMuted });
+    if (!nextMuted) this.playFlip();
+    return !nextMuted;
   }
 }
 
 /* ==========================================================================
-   4. CORE GAME ENGINE & STATE MANAGEMENT
+   5. CORE GAME ENGINE & SCREEN CONTROLLER
    ========================================================================== */
 class CocktailCabinetGame {
   constructor(dataset) {
     this.dataset = dataset;
-    this.synth = new AudioSynthesizer();
+    this.storage = new PersistenceManager();
+    this.synth = new AudioSynthesizer(this.storage);
 
-    // 5-Challenge playthrough definition: 5 pairs = 10 cards total
     this.totalPairs = 5;
     this.cards = [];
     this.firstCard = null;
@@ -268,7 +317,7 @@ class CocktailCabinetGame {
     this.isBoardLocked = false;
 
     // Shift Metrics
-    this.currentTier = 'apprentice'; // apprentice | bartender | head
+    this.currentTier = this.storage.settings.selectedTier || 'apprentice';
     this.matchedPairsCount = 0;
     this.score = 0;
     this.streak = 0;
@@ -282,6 +331,30 @@ class CocktailCabinetGame {
 
     // Cache DOM Elements
     this.dom = {
+      // Views
+      viewMenu: document.getElementById('view-menu'),
+      viewGame: document.getElementById('view-game'),
+      // Menu Elements
+      menuHighScore: document.getElementById('menu-high-score'),
+      menuBestStreak: document.getElementById('menu-best-streak'),
+      menuBestTime: document.getElementById('menu-best-time'),
+      menuShiftsCount: document.getElementById('menu-shifts-count'),
+      menuMasteredCount: document.getElementById('menu-mastered-count'),
+      menuTabs: [
+        document.getElementById('menu-tab-apprentice'),
+        document.getElementById('menu-tab-bartender'),
+        document.getElementById('menu-tab-head')
+      ],
+      btnStartShift: document.getElementById('btn-start-shift'),
+      btnMenuCodex: document.getElementById('btn-menu-codex'),
+      btnMenuHandbook: document.getElementById('btn-menu-handbook'),
+      btnMenuSound: document.getElementById('btn-menu-sound'),
+      menuSoundLabel: document.getElementById('menu-sound-label'),
+      menuSoundIconOn: document.getElementById('menu-sound-icon-on'),
+      menuSoundIconOff: document.getElementById('menu-sound-icon-off'),
+      btnHomePortal: document.getElementById('btn-home-portal'),
+      // Game View Elements
+      gameTierIndicator: document.getElementById('game-tier-indicator'),
       grid: document.getElementById('card-grid'),
       hudScore: document.getElementById('hud-score'),
       hudStreak: document.getElementById('hud-streak'),
@@ -292,7 +365,7 @@ class CocktailCabinetGame {
       feedbackIcon: document.getElementById('feedback-icon'),
       feedbackHeading: document.getElementById('feedback-heading'),
       feedbackText: document.getElementById('feedback-text'),
-      tierPills: document.querySelectorAll('.tier-pill'),
+      btnGameToMenu: document.getElementById('btn-game-to-menu'),
       btnNewShift: document.getElementById('btn-new-shift'),
       btnPeek: document.getElementById('btn-peek'),
       btnHowTo: document.getElementById('btn-how-to'),
@@ -301,6 +374,7 @@ class CocktailCabinetGame {
       soundIconOff: document.getElementById('sound-icon-off'),
       // Victory Modal
       modalVictory: document.getElementById('modal-victory'),
+      btnVicMenu: document.getElementById('btn-vic-menu'),
       btnVicRestart: document.getElementById('btn-vic-restart'),
       btnVicCodex: document.getElementById('btn-vic-codex'),
       vicScore: document.getElementById('vic-score'),
@@ -318,66 +392,127 @@ class CocktailCabinetGame {
       // Handbook
       modalHandbook: document.getElementById('modal-handbook'),
       btnCloseHandbook: document.getElementById('btn-close-handbook'),
-      btnCloseHandbookCta: document.getElementById('btn-close-handbook-cta')
+      btnCloseHandbookCta: document.getElementById('btn-close-handbook-cta'),
+      btnResetData: document.getElementById('btn-reset-data')
     };
 
-    this.initSoundUI();
+    this.initUI();
     this.bindEvents();
     this.renderCodex();
-    this.startNewShift();
+    this.showView('menu');
   }
 
   /* ------------------------------------------------------------------------
-     INITIALIZATION & EVENT BINDINGS
+     INITIALIZATION & MENU NAVIGATION
      ------------------------------------------------------------------------ */
-  initSoundUI() {
-    if (this.synth.muted) {
+  initUI() {
+    this.updateSoundUI();
+    this.updateMenuStatsUI();
+    this.updateTierSelectionUI(this.currentTier);
+  }
+
+  showView(viewName) {
+    if (viewName === 'menu') {
+      this.resetTimer();
+      this.updateMenuStatsUI();
+      this.dom.viewGame.classList.remove('view-active');
+      this.dom.viewMenu.classList.add('view-active');
+    } else if (viewName === 'game') {
+      this.dom.viewMenu.classList.remove('view-active');
+      this.dom.viewGame.classList.add('view-active');
+      this.startNewShift();
+    }
+  }
+
+  updateSoundUI() {
+    const isMuted = this.synth.muted;
+    // Header icon
+    if (isMuted) {
       this.dom.soundIconOn.classList.add('hidden');
       this.dom.soundIconOff.classList.remove('hidden');
       this.dom.btnSound.setAttribute('aria-pressed', 'false');
+      // Menu audio
+      this.dom.menuSoundIconOn.classList.add('hidden');
+      this.dom.menuSoundIconOff.classList.remove('hidden');
+      this.dom.menuSoundLabel.textContent = 'Audio: Off';
     } else {
       this.dom.soundIconOn.classList.remove('hidden');
       this.dom.soundIconOff.classList.add('hidden');
       this.dom.btnSound.setAttribute('aria-pressed', 'true');
+      // Menu audio
+      this.dom.menuSoundIconOn.classList.remove('hidden');
+      this.dom.menuSoundIconOff.classList.add('hidden');
+      this.dom.menuSoundLabel.textContent = 'Audio: On';
     }
   }
 
+  updateMenuStatsUI() {
+    const stats = this.storage.stats;
+    this.dom.menuHighScore.textContent = stats.highScore.toLocaleString();
+    this.dom.menuBestStreak.textContent = `${stats.bestStreak}x`;
+    
+    if (stats.bestTimeSeconds > 0) {
+      const m = Math.floor(stats.bestTimeSeconds / 60).toString().padStart(2, '0');
+      const s = (stats.bestTimeSeconds % 60).toString().padStart(2, '0');
+      this.dom.menuBestTime.textContent = `${m}:${s}`;
+    } else {
+      this.dom.menuBestTime.textContent = '--:--';
+    }
+
+    this.dom.menuShiftsCount.textContent = stats.shiftsCompleted;
+    this.dom.menuMasteredCount.textContent = `${stats.masteredDrinkIds.length} / ${this.dataset.length} Mastered`;
+  }
+
+  updateTierSelectionUI(tier) {
+    this.currentTier = tier;
+    this.storage.updateSettings({ selectedTier: tier });
+
+    this.dom.menuTabs.forEach(tab => {
+      if (!tab) return;
+      const isMatch = tab.dataset.tier === tier;
+      tab.classList.toggle('active', isMatch);
+      tab.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+    });
+
+    const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+    this.dom.gameTierIndicator.textContent = `${tierName} Rail`;
+  }
+
   bindEvents() {
-    // Sound Button
-    this.dom.btnSound.addEventListener('click', () => {
-      const isEnabled = this.synth.toggle();
-      this.dom.btnSound.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
-      if (isEnabled) {
-        this.dom.soundIconOn.classList.remove('hidden');
-        this.dom.soundIconOff.classList.add('hidden');
-      } else {
-        this.dom.soundIconOn.classList.add('hidden');
-        this.dom.soundIconOff.classList.remove('hidden');
+    // Sound Toggles
+    const toggleAudio = () => {
+      this.synth.toggle();
+      this.updateSoundUI();
+    };
+    this.dom.btnSound.addEventListener('click', toggleAudio);
+    this.dom.btnMenuSound.addEventListener('click', toggleAudio);
+
+    // Menu Tier Buttons
+    this.dom.menuTabs.forEach(tab => {
+      if (tab) {
+        tab.addEventListener('click', (e) => {
+          const tier = e.currentTarget.dataset.tier;
+          this.updateTierSelectionUI(tier);
+        });
       }
     });
 
-    // Tier Tabs
-    this.dom.tierPills.forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        const tier = e.currentTarget.dataset.tier;
-        if (this.currentTier === tier) return;
-        this.dom.tierPills.forEach(p => {
-          p.classList.remove('active');
-          p.setAttribute('aria-selected', 'false');
-        });
-        e.currentTarget.classList.add('active');
-        e.currentTarget.setAttribute('aria-selected', 'true');
-        this.currentTier = tier;
-        this.startNewShift();
-      });
-    });
+    // Navigation Buttons
+    this.dom.btnStartShift.addEventListener('click', () => this.showView('game'));
+    this.dom.btnGameToMenu.addEventListener('click', () => this.showView('menu'));
+    this.dom.btnMenuCodex.addEventListener('click', () => this.openModal(this.dom.modalCodex, this.dom.btnMenuCodex));
+    this.dom.btnMenuHandbook.addEventListener('click', () => this.openModal(this.dom.modalHandbook, this.dom.btnMenuHandbook));
 
-    // Main Control Buttons
+    // Game Action Buttons
     this.dom.btnNewShift.addEventListener('click', () => this.startNewShift());
     this.dom.btnPeek.addEventListener('click', () => this.executePeek());
     this.dom.btnHowTo.addEventListener('click', () => this.openModal(this.dom.modalHandbook, this.dom.btnHowTo));
 
-    // Victory Dialog Actions
+    // Victory Actions
+    this.dom.btnVicMenu.addEventListener('click', () => {
+      this.closeModal(this.dom.modalVictory);
+      this.showView('menu');
+    });
     this.dom.btnVicRestart.addEventListener('click', () => {
       this.closeModal(this.dom.modalVictory);
       this.startNewShift();
@@ -399,18 +534,26 @@ class CocktailCabinetGame {
       this.filterCodex(this.dom.codexSearch.value, btn.dataset.filter);
     });
 
-    // Handbook close
+    // Handbook
     this.dom.btnCloseHandbook.addEventListener('click', () => this.closeModal(this.dom.modalHandbook));
     this.dom.btnCloseHandbookCta.addEventListener('click', () => this.closeModal(this.dom.modalHandbook));
+    this.dom.btnResetData.addEventListener('click', () => {
+      if (confirm('Are you sure you want to reset all bar records and progress?')) {
+        this.storage.resetAllData();
+        this.initUI();
+        this.closeModal(this.dom.modalHandbook);
+        alert('Bar records reset successfully.');
+      }
+    });
 
-    // Backdrop click dismiss
+    // Backdrop clicks
     [this.dom.modalVictory, this.dom.modalCodex, this.dom.modalHandbook].forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) this.closeModal(modal);
       });
     });
 
-    // Escape Key Dismiss
+    // Keydown ESC
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeModal(this.dom.modalVictory);
@@ -419,7 +562,7 @@ class CocktailCabinetGame {
       }
     });
 
-    // Touch audio unlock primer
+    // Audio unlock
     const unlockAudio = () => {
       this.synth.init();
       document.removeEventListener('touchstart', unlockAudio);
@@ -430,7 +573,7 @@ class CocktailCabinetGame {
   }
 
   /* ------------------------------------------------------------------------
-     GAME LIFECYCLE & 5-PLAYTHROUGH SHUFFLE
+     SHIFT ENGINE
      ------------------------------------------------------------------------ */
   startNewShift() {
     this.resetTimer();
@@ -444,30 +587,18 @@ class CocktailCabinetGame {
     this.totalMoves = 0;
     this.sessionDrinks.clear();
 
-    // Assemble exactly 10 cards (5 Identity cards, 5 Spec cards)
     const deck = [];
     this.dataset.forEach(cocktail => {
-      deck.push({
-        id: `${cocktail.id}-name`,
-        cocktailId: cocktail.id,
-        type: 'identity',
-        cocktail: cocktail
-      });
-      deck.push({
-        id: `${cocktail.id}-spec`,
-        cocktailId: cocktail.id,
-        type: 'spec',
-        cocktail: cocktail
-      });
+      deck.push({ id: `${cocktail.id}-name`, cocktailId: cocktail.id, type: 'identity', cocktail });
+      deck.push({ id: `${cocktail.id}-spec`, cocktailId: cocktail.id, type: 'spec', cocktail });
     });
 
-    // Shuffle cards with Fisher-Yates algorithm
     this.cards = this.shuffleArray(deck);
     this.renderGrid();
     this.updateHUD();
 
     const tierName = this.currentTier.charAt(0).toUpperCase() + this.currentTier.slice(1);
-    this.setFeedback('idle', `${tierName} Station Ready`, 'Tap any card to reveal classic cocktail title or structural spec.');
+    this.setFeedback('idle', `${tierName} Station Ready`, 'Tap cards to reveal cocktail titles or formulas.');
   }
 
   shuffleArray(arr) {
@@ -479,9 +610,6 @@ class CocktailCabinetGame {
     return array;
   }
 
-  /* ------------------------------------------------------------------------
-     GRID RENDERING (10 CARDS)
-     ------------------------------------------------------------------------ */
   renderGrid() {
     this.dom.grid.innerHTML = '';
     const fragment = document.createDocumentFragment();
@@ -493,9 +621,7 @@ class CocktailCabinetGame {
       cardEl.dataset.cocktailId = cardData.cocktailId;
       cardEl.dataset.type = cardData.type;
       cardEl.setAttribute('aria-label', `Card ${idx + 1}: Face down`);
-      cardEl.setAttribute('tabindex', '0');
 
-      // Card Back
       const backFace = document.createElement('div');
       backFace.className = 'card-face card-face-back';
       backFace.innerHTML = `
@@ -504,32 +630,30 @@ class CocktailCabinetGame {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
               <path d="M8 22h8M12 15v7M19 3l-7 8-7-8h14zM5 3l7 7 7-7"/>
             </svg>
-            <span class="back-crest-text">BAR SPEC</span>
+            <span class="back-crest-text">SPEC</span>
           </div>
         </div>
       `;
 
-      // Card Front
       const frontFace = document.createElement('div');
       frontFace.className = `card-face card-face-front type-${cardData.type}`;
 
       if (cardData.type === 'identity') {
         frontFace.innerHTML = `
           <div class="card-top-tag">
-            <span>Classic Drink</span>
+            <span>Classic</span>
             <span aria-hidden="true">🍸</span>
           </div>
           <h3 class="cocktail-name">${cardData.cocktail.name}</h3>
           <div class="cocktail-meta-group">
             <span class="mini-pill">${cardData.cocktail.spirit}</span>
-            <span class="mini-pill">${cardData.cocktail.family}</span>
             <span class="mini-pill">${cardData.cocktail.glassware}</span>
           </div>
         `;
       } else {
         frontFace.innerHTML = `
           <div class="card-top-tag">
-            <span>Formula &amp; Method</span>
+            <span>Formula</span>
             <span aria-hidden="true">📖</span>
           </div>
           <div class="spec-formula">${cardData.cocktail.formula}</div>
@@ -541,7 +665,6 @@ class CocktailCabinetGame {
       cardEl.appendChild(backFace);
       cardEl.appendChild(frontFace);
 
-      // Card Event Listeners
       cardEl.addEventListener('click', () => this.handleCardSelection(cardEl, cardData));
       cardEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -556,35 +679,26 @@ class CocktailCabinetGame {
     this.dom.grid.appendChild(fragment);
   }
 
-  /* ------------------------------------------------------------------------
-     INTERACTION & MATCH EVALUATION
-     ------------------------------------------------------------------------ */
   handleCardSelection(cardEl, cardData) {
     if (this.isBoardLocked) return;
     if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
 
-    // Start timer on initial card touch
-    if (!this.isTimerRunning) {
-      this.startTimer();
-    }
+    if (!this.isTimerRunning) this.startTimer();
 
-    // Flip chosen card
     this.flipCard(cardEl, cardData);
     this.synth.playFlip();
 
     if (!this.firstCard) {
       this.firstCard = { el: cardEl, data: cardData };
-      const cardTypeLabel = cardData.type === 'identity' ? 'Identity Card' : 'Formula Spec';
-      this.setFeedback('idle', 'Card Inspected', `Uncovered: ${cardData.cocktail.name} (${cardTypeLabel}). Select a partner card.`);
+      const cardTypeLabel = cardData.type === 'identity' ? 'Drink Title' : 'Recipe Spec';
+      this.setFeedback('idle', 'Card Inspected', `${cardData.cocktail.name} (${cardTypeLabel}). Tap partner card.`);
       return;
     }
 
-    // Second Card Selected
     this.secondCard = { el: cardEl, data: cardData };
     this.totalMoves++;
     this.isBoardLocked = true;
 
-    // Evaluate matching rules
     const isMatch = (this.firstCard.data.cocktailId === this.secondCard.data.cocktailId) &&
                     (this.firstCard.data.type !== this.secondCard.data.type);
 
@@ -598,7 +712,7 @@ class CocktailCabinetGame {
   flipCard(cardEl, cardData) {
     cardEl.classList.add('flipped');
     const label = cardData.type === 'identity'
-      ? `${cardData.cocktail.name}, ${cardData.cocktail.spirit} based ${cardData.cocktail.family}`
+      ? `${cardData.cocktail.name}, ${cardData.cocktail.spirit}`
       : `Spec for ${cardData.cocktail.name}: ${cardData.cocktail.formula}`;
     cardEl.setAttribute('aria-label', label);
   }
@@ -611,38 +725,26 @@ class CocktailCabinetGame {
   handleMatchSuccess() {
     this.synth.playMatch();
     const cocktail = this.firstCard.data.cocktail;
-    this.sessionDrinks.add(cocktail);
+    this.sessionDrinks.add(cocktail.id);
 
-    // Apply matched state
     this.firstCard.el.classList.add('matched');
     this.secondCard.el.classList.add('matched');
-    this.firstCard.el.setAttribute('aria-disabled', 'true');
-    this.secondCard.el.setAttribute('aria-disabled', 'true');
 
-    // Score & Multiplier Calculation
     this.streak++;
     if (this.streak > this.maxStreak) this.maxStreak = this.streak;
     const multiplier = Math.min(3.0, 1 + (this.streak - 1) * 0.5);
 
-    const basePoints = this.currentTier === 'head' ? 350 : 250;
+    const basePoints = this.currentTier === 'head' ? 350 : (this.currentTier === 'bartender' ? 300 : 250);
     const earnedPoints = Math.round(basePoints * multiplier);
     this.score += earnedPoints;
     this.matchedPairsCount++;
 
     this.updateHUD();
-
-    // Educational technique announcement
-    this.setFeedback(
-      'correct',
-      `Matched: ${cocktail.name}`,
-      `${cocktail.technique} • Serve in ${cocktail.glassware} with ${cocktail.garnish}.`
-    );
-
+    this.setFeedback('correct', `Matched: ${cocktail.name}`, `${cocktail.technique} • Serve in ${cocktail.glassware}.`);
     this.resetSelection();
 
-    // Check complete shift condition (all 5 pairs matched)
     if (this.matchedPairsCount === this.totalPairs) {
-      setTimeout(() => this.concludeShift(), 600);
+      setTimeout(() => this.concludeShift(), 500);
     }
   }
 
@@ -654,23 +756,17 @@ class CocktailCabinetGame {
     const c1 = this.firstCard.data.cocktail;
     const c2 = this.secondCard.data.cocktail;
 
-    // Intelligent Bartender Diagnostic Feedback
     let clue = '';
     if (this.firstCard.data.type === this.secondCard.data.type) {
-      clue = this.firstCard.data.type === 'identity'
-        ? 'Both are Drink Titles! Remember to pair a Drink Title with its Recipe Spec card.'
-        : 'Both are Formula Specs! Pair one Recipe Spec to its corresponding Cocktail Name.';
+      clue = 'Pair one Drink Title card to one Recipe Spec card.';
     } else if (c1.spirit === c2.spirit) {
-      clue = `Both drinks highlight ${c1.spirit}, but differ in method (${c1.technique} vs ${c2.technique}).`;
-    } else if (c1.family === c2.family) {
-      clue = `Both belong to the ${c1.family} style, but contrast in base spirits (${c1.spirit} vs ${c2.spirit}).`;
+      clue = `Both use ${c1.spirit}, but feature different preparation methods.`;
     } else {
-      clue = `${c1.name} uses ${c1.spirit} in a ${c1.glassware}, while ${c2.name} uses ${c2.spirit}.`;
+      clue = `${c1.name} uses ${c1.spirit}, while ${c2.name} uses ${c2.spirit}.`;
     }
 
     this.setFeedback('mismatch', 'Recipe Mismatch', clue);
 
-    // Card shake animation
     this.firstCard.el.classList.add('shake');
     this.secondCard.el.classList.add('shake');
 
@@ -684,7 +780,7 @@ class CocktailCabinetGame {
         this.unflipCard(this.secondCard.el);
       }
       this.resetSelection();
-    }, 1100);
+    }, 1000);
   }
 
   resetSelection() {
@@ -693,9 +789,6 @@ class CocktailCabinetGame {
     this.isBoardLocked = false;
   }
 
-  /* ------------------------------------------------------------------------
-     STATION GLANCE (TACTICAL ASSIST)
-     ------------------------------------------------------------------------ */
   executePeek() {
     if (this.isBoardLocked || this.matchedPairsCount === this.totalPairs) return;
     this.isBoardLocked = true;
@@ -705,16 +798,16 @@ class CocktailCabinetGame {
     const unmatchedCards = Array.from(this.dom.grid.querySelectorAll('.memory-card:not(.matched)'));
     unmatchedCards.forEach(c => c.classList.add('flipped'));
 
-    this.setFeedback('idle', 'Station Glanced', 'The bar rail is momentarily uncovered (-150 pts penalty).');
+    this.setFeedback('idle', 'Station Glance', 'Card rail revealed (-150 pts penalty).');
 
     setTimeout(() => {
       unmatchedCards.forEach(c => c.classList.remove('flipped'));
       this.isBoardLocked = false;
-    }, 1150);
+    }, 1100);
   }
 
   /* ------------------------------------------------------------------------
-     TIMER & HUD MANAGEMENT
+     TIMERS & HUD
      ------------------------------------------------------------------------ */
   startTimer() {
     this.isTimerRunning = true;
@@ -723,9 +816,8 @@ class CocktailCabinetGame {
       this.elapsedSeconds++;
       this.renderTime();
 
-      // Head Bartender Rush Hour feedback
       if (this.currentTier === 'head' && this.elapsedSeconds >= 90 && this.matchedPairsCount < this.totalPairs) {
-        this.setFeedback('mismatch', 'Rush Hour Expired', 'Time exceeded 90s! Finish the rail to complete the shift.');
+        this.setFeedback('mismatch', 'Rush Hour Limit Exceeded', '90s rush time exceeded! Keep mixing to clear the rail.');
       }
     }, 1000);
   }
@@ -767,6 +859,9 @@ class CocktailCabinetGame {
     if (this.timerInterval) clearInterval(this.timerInterval);
     this.synth.playVictory();
 
+    // Record stats in persistence manager
+    this.storage.recordShiftResult(this.score, this.maxStreak, this.elapsedSeconds, Array.from(this.sessionDrinks));
+
     const mins = Math.floor(this.elapsedSeconds / 60).toString().padStart(2, '0');
     const secs = (this.elapsedSeconds % 60).toString().padStart(2, '0');
     const formattedTime = `${mins}:${secs}`;
@@ -775,13 +870,11 @@ class CocktailCabinetGame {
       ? Math.min(100, Math.round((this.totalPairs / this.totalMoves) * 100)) 
       : 100;
 
-    // Populate modal statistics
     this.dom.vicScore.textContent = this.score.toLocaleString();
     this.dom.vicTime.textContent = formattedTime;
     this.dom.vicAccuracy.textContent = `${accuracy}%`;
     this.dom.vicStreak.textContent = `${this.maxStreak}x`;
 
-    // Render 5 Mastered Cocktail badges
     this.dom.vicCocktailsList.innerHTML = '';
     this.dataset.forEach(drink => {
       const badge = document.createElement('span');
@@ -794,16 +887,12 @@ class CocktailCabinetGame {
   }
 
   /* ------------------------------------------------------------------------
-     CABINET CODEX VIEWER
+     CODEX VIEWER
      ------------------------------------------------------------------------ */
   renderCodex(filteredList = this.dataset) {
     this.dom.codexList.innerHTML = '';
     if (filteredList.length === 0) {
-      this.dom.codexList.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-          <p>No matching cocktail entries found in the Cabinet.</p>
-        </div>
-      `;
+      this.dom.codexList.innerHTML = `<div style="text-align: center; padding: 24px; color: var(--text-muted);">No entries found matching query.</div>`;
       return;
     }
 
@@ -862,7 +951,7 @@ class CocktailCabinetGame {
   }
 
   /* ------------------------------------------------------------------------
-     MODAL & DIALOG ACCESSIBILITY CONTROLS
+     MODAL CONTROLLER
      ------------------------------------------------------------------------ */
   openModal(modalEl, triggerBtn = null) {
     if (triggerBtn) {
@@ -870,16 +959,12 @@ class CocktailCabinetGame {
       triggerBtn.setAttribute('aria-expanded', 'true');
     }
     modalEl.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-
-    // Focus first interactive control in modal
-    const focusable = modalEl.querySelector('button, [href], input, [tabindex="0"]');
+    const focusable = modalEl.querySelector('button, input, [tabindex="0"]');
     if (focusable) focusable.focus();
   }
 
   closeModal(modalEl) {
     modalEl.classList.add('hidden');
-    document.body.style.overflow = '';
     if (this.lastTriggerElement) {
       this.lastTriggerElement.setAttribute('aria-expanded', 'false');
       this.lastTriggerElement.focus();
@@ -889,13 +974,12 @@ class CocktailCabinetGame {
 }
 
 /* ==========================================================================
-   5. APPLICATION INITIALIZATION
+   6. APP INITIALIZATION
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  const isValid = validateCocktailDataset(COCKTAILS_DB);
-  if (isValid) {
+  if (validateCocktailDataset(COCKTAILS_DB)) {
     window.cocktailCabinetApp = new CocktailCabinetGame(COCKTAILS_DB);
   } else {
-    console.error('Application aborted: cocktail dataset did not pass integrity validation.');
+    console.error('App initialization aborted: Cocktail dataset validation failed.');
   }
 });
