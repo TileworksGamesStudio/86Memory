@@ -6,11 +6,11 @@
 'use strict';
 
 /* ==========================================================================
-   1. COCKTAIL DATASET (EXACTLY 5 PLAYABLE CLASSIC EXAMPLES)
+   1. MASTER COCKTAIL DATASET (66 CANONICAL CLASSICS)
    ========================================================================== */
 const COCKTAILS_DB = [
   /* ==========================================================================
-     1. GIN CANON (12 DRINKS)
+     GIN CLASSICS
      ========================================================================== */
   {
     id: 'negroni',
@@ -194,7 +194,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     2. WHISKEY, BOURBON, RYE & SCOTCH (14 DRINKS)
+     WHISKEY, BOURBON, RYE & SCOTCH
      ========================================================================== */
   {
     id: 'old-fashioned',
@@ -408,7 +408,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     3. RUM & CACHAÇA CLASSICS (10 DRINKS)
+     RUM & CACHAÇA CLASSICS
      ========================================================================== */
   {
     id: 'daiquiri',
@@ -562,7 +562,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     4. TEQUILA & MEZCAL (9 DRINKS)
+     TEQUILA & MEZCAL
      ========================================================================== */
   {
     id: 'margarita',
@@ -701,7 +701,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     5. VODKA CLASSICS (6 DRINKS)
+     VODKA CLASSICS
      ========================================================================== */
   {
     id: 'espresso-martini',
@@ -795,7 +795,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     6. BRANDY, COGNAC & PISCO (6 DRINKS)
+     BRANDY, COGNAC & PISCO
      ========================================================================== */
   {
     id: 'sidecar',
@@ -889,7 +889,7 @@ const COCKTAILS_DB = [
   },
 
   /* ==========================================================================
-     7. APERITIF, SHERRY & SPECIAL CLASSICS (9 DRINKS)
+     APERITIF, SHERRY & SPECIAL CLASSICS
      ========================================================================== */
   {
     id: 'americano',
@@ -1026,22 +1026,28 @@ const COCKTAILS_DB = [
     origin: 'Created by Harry Johnson in 1895; named "Bijou" (jewel) for the colors of its three key ingredients.',
     pitfall: 'Shaking the drink; Green Chartreuse and gin become cloudy and bitter when violently shaken.'
   }
-],
+];
 
 /* ==========================================================================
    2. DATA VALIDATION
    ========================================================================== */
 function validateCocktailDataset(dataset) {
-  if (!Array.isArray(dataset) || dataset.length !== 5) return false;
-  const reqKeys = ['id', 'name', 'spirit', 'family', 'formula', 'technique', 'glassware', 'garnish', 'sensoryProfile', 'origin', 'pitfall'];
+  if (!Array.isArray(dataset) || dataset.length < 5) return false;
+  const reqKeys = ['id', 'name', 'difficulty', 'spirit', 'family', 'formula', 'technique', 'glassware', 'ice', 'garnish', 'sensoryProfile', 'origin', 'pitfall'];
   const seenIds = new Set();
 
   for (const item of dataset) {
     if (!item || typeof item !== 'object') return false;
     for (const k of reqKeys) {
-      if (typeof item[k] !== 'string' || item[k].trim() === '') return false;
+      if (typeof item[k] !== 'string' || item[k].trim() === '') {
+        console.warn(`Cocktail validation failed on ID ${item?.id || 'unknown'}: missing or empty key "${k}"`);
+        return false;
+      }
     }
-    if (seenIds.has(item.id)) return false;
+    if (seenIds.has(item.id)) {
+      console.warn(`Duplicate cocktail ID: ${item.id}`);
+      return false;
+    }
     seenIds.add(item.id);
   }
   return true;
@@ -1172,9 +1178,7 @@ class AudioSynthesizer {
       gain.connect(this.ctx.destination);
       osc.start();
       osc.stop(this.ctx.currentTime + 0.08);
-    } catch (e) {
-      // Audio context error recovery
-    }
+    } catch (e) {}
   }
 
   playMatch() {
@@ -1290,6 +1294,7 @@ class CocktailCabinetGame {
 
     this.totalPairs = 5;
     this.cards = [];
+    this.currentShiftDrinks = [];
     this.firstCard = null;
     this.secondCard = null;
     this.isBoardLocked = false;
@@ -1673,9 +1678,19 @@ class CocktailCabinetGame {
     this.sessionDrinks.clear();
     this.rushSecondsRemaining = this.RUSH_TIME_LIMIT;
 
+    // Filter drink pool matching current difficulty tier
+    const tierKey = this.currentTier === 'head' ? 'Head Bartender' : (this.currentTier === 'bartender' ? 'Bartender' : 'Apprentice');
+    let tierPool = this.dataset.filter(c => c.difficulty.toLowerCase() === tierKey.toLowerCase());
+    if (tierPool.length < 5) {
+      tierPool = this.dataset;
+    }
+
+    // Select exactly 5 cocktails for this rail service
+    this.currentShiftDrinks = this.shuffleArray(tierPool).slice(0, 5);
+
     // Build 10-card paired deck
     const deck = [];
-    this.dataset.forEach(cocktail => {
+    this.currentShiftDrinks.forEach(cocktail => {
       deck.push({ id: `${cocktail.id}-name`, cocktailId: cocktail.id, type: 'identity', cocktail });
       deck.push({ id: `${cocktail.id}-spec`, cocktailId: cocktail.id, type: 'spec', cocktail });
     });
@@ -1762,8 +1777,7 @@ class CocktailCabinetGame {
       cardEl.appendChild(frontFace);
 
       // Card touch and click listeners
-      cardEl.addEventListener('click', (e) => {
-        // Allow inner scrolling without re-triggering card event if already flipped
+      cardEl.addEventListener('click', () => {
         if (cardEl.classList.contains('flipped')) return;
         this.handleCardSelection(cardEl, cardData);
       });
@@ -2029,7 +2043,7 @@ class CocktailCabinetGame {
     this.dom.vicStreak.textContent = `${this.maxStreak}x`;
 
     this.dom.vicCocktailsList.innerHTML = '';
-    this.dataset.forEach(drink => {
+    this.currentShiftDrinks.forEach(drink => {
       const isNew = !prevMastered.has(drink.id) && this.sessionDrinks.has(drink.id);
       const badge = document.createElement('span');
       badge.className = 'recap-badge';
@@ -2111,15 +2125,31 @@ class CocktailCabinetGame {
       currentSpirit = activePill ? activePill.dataset.filter : 'all';
     }
 
+    const targetSpirit = currentSpirit.toLowerCase();
+
     const filtered = this.dataset.filter(drink => {
+      const dSpirit = drink.spirit.toLowerCase();
+
       const matchesSearch = !q ||
         drink.name.toLowerCase().includes(q) ||
         drink.spirit.toLowerCase().includes(q) ||
         drink.formula.toLowerCase().includes(q) ||
-        drink.family.toLowerCase().includes(q);
+        drink.family.toLowerCase().includes(q) ||
+        drink.glassware.toLowerCase().includes(q) ||
+        drink.technique.toLowerCase().includes(q);
 
-      const matchesSpirit = currentSpirit === 'all' ||
-        drink.spirit.toLowerCase() === currentSpirit.toLowerCase();
+      let matchesSpirit = targetSpirit === 'all';
+      if (!matchesSpirit) {
+        if (targetSpirit === 'tequila') {
+          matchesSpirit = dSpirit === 'tequila' || dSpirit === 'mezcal';
+        } else if (targetSpirit === 'rum') {
+          matchesSpirit = dSpirit === 'rum' || dSpirit === 'cachaça';
+        } else if (targetSpirit === 'whiskey') {
+          matchesSpirit = dSpirit.includes('whiskey') || dSpirit.includes('scotch') || dSpirit.includes('bourbon') || dSpirit.includes('rye');
+        } else {
+          matchesSpirit = dSpirit === targetSpirit;
+        }
+      }
 
       return matchesSearch && matchesSpirit;
     });
