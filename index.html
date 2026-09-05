@@ -50,7 +50,7 @@
             <span class="record-value text-accent" id="menu-best-streak">0x</span>
           </div>
           <div class="record-item">
-            <span class="record-label">Best Time</span>
+            <span class="record-label">Best Clear</span>
             <span class="record-value font-mono" id="menu-best-time">--:--</span>
           </div>
           <div class="record-item">
@@ -62,28 +62,36 @@
 
       <!-- Service Tier Selection -->
       <div class="menu-section">
-        <label class="section-label">Select Rail Difficulty Tier</label>
+        <div class="section-label-row">
+          <span class="section-label">Select Rail Difficulty Tier</span>
+          <span class="tier-status-hint" id="tier-status-hint">Apprentice Rail Selected</span>
+        </div>
         <div class="tier-selector-menu" role="tablist" aria-label="Shift Difficulty Tier Selection">
+          <!-- Apprentice Tier -->
           <button class="tier-card active" data-tier="apprentice" role="tab" aria-selected="true" id="menu-tab-apprentice">
             <div class="tier-card-head">
               <span class="tier-name">Apprentice</span>
-              <span class="pill-badge">Relaxed Pace</span>
+              <span class="pill-badge status-unlocked">Unlocked</span>
             </div>
-            <span class="tier-desc">Standard scoring, generous time limits, classic drink specs.</span>
+            <span class="tier-desc">Relaxed pace, standard 250pt matches, ideal for learning formulas.</span>
           </button>
+
+          <!-- Bartender Tier -->
           <button class="tier-card" data-tier="bartender" role="tab" aria-selected="false" id="menu-tab-bartender">
             <div class="tier-card-head">
               <span class="tier-name">Bartender</span>
-              <span class="pill-badge">Standard Rail</span>
+              <span class="pill-badge" id="badge-bartender-tier">Complete 1 Shift</span>
             </div>
-            <span class="tier-desc">Enhanced point multipliers and strict craft matching.</span>
+            <span class="tier-desc">Standard rail tempo, 300pt multiplier matches, strict technique pairings.</span>
           </button>
+
+          <!-- Head Bartender Tier -->
           <button class="tier-card" data-tier="head" role="tab" aria-selected="false" id="menu-tab-head">
             <div class="tier-card-head">
               <span class="tier-name">Head Bartender</span>
-              <span class="pill-badge">Rush Hour</span>
+              <span class="pill-badge" id="badge-head-tier">Master 4 Classics</span>
             </div>
-            <span class="tier-desc">90-second rush challenge, high bonus points for flawless streaks.</span>
+            <span class="tier-desc">75-second Rush Hour sprint! 350pt base matches, miss penalties.</span>
           </button>
         </div>
       </div>
@@ -94,7 +102,7 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
-          <span>Start Service Shift</span>
+          <span id="btn-start-label">Start Apprentice Shift</span>
         </button>
 
         <div class="menu-sub-actions">
@@ -103,7 +111,7 @@
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
-            <span>Cabinet Codex</span>
+            <span>Codex</span>
           </button>
           <button id="btn-menu-handbook" class="btn btn-secondary">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -127,9 +135,9 @@
         </div>
       </div>
 
-      <!-- Studio Home Button (At Bottom of Main Menu) -->
+      <!-- Studio Home Portal Button -->
       <footer class="menu-footer-home">
-        <a href="https://tileworksgamesstudio.github.io/86/" class="btn btn-home-link" id="btn-home-portal">
+        <a href="https://tileworksgamesstudio.github.io/86/" class="btn btn-home-link" id="btn-home-portal" rel="noopener">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -144,7 +152,7 @@
          =================================================================== -->
     <section id="view-game" class="app-view" aria-label="Service Rail Gameplay">
       
-      <!-- Top Bar Navigation & Brand Header -->
+      <!-- Top Bar Navigation & Header -->
       <header class="bar-header" role="banner">
         <div class="brand-group">
           <button id="btn-game-to-menu" class="icon-btn" aria-label="Return to Main Menu" title="Return to Menu">
@@ -155,7 +163,7 @@
           </button>
           <div class="brand-text">
             <h1 class="brand-title">The Cocktail Cabinet</h1>
-            <span class="brand-subtitle" id="game-tier-indicator">Apprentice Tier</span>
+            <span class="brand-subtitle" id="game-tier-indicator">Apprentice Rail</span>
           </div>
         </div>
 
@@ -201,7 +209,7 @@
             <span class="metric-value" id="hud-pairs">0 / 5</span>
           </div>
           <div class="metric-item">
-            <span class="metric-label">Timer</span>
+            <span class="metric-label" id="hud-timer-label">Timer</span>
             <span class="metric-value font-mono" id="hud-timer">00:00</span>
           </div>
         </div>
@@ -264,7 +272,7 @@
     <div class="modal-window victory-card">
       <div class="victory-header">
         <div class="victory-medal" aria-hidden="true">🍸</div>
-        <span class="badge-tag">Service Concluded</span>
+        <span class="badge-tag" id="victory-tier-tag">Shift Concluded</span>
         <h2 id="victory-title" class="victory-heading">Outstanding Service</h2>
         <p class="victory-sub" id="victory-subtext">All classic tickets have been mixed, balanced, and served with craft accuracy.</p>
       </div>
@@ -300,6 +308,43 @@
         <button id="btn-vic-menu" class="btn btn-secondary">Main Menu</button>
         <button id="btn-vic-codex" class="btn btn-secondary">Review Codex</button>
         <button id="btn-vic-restart" class="btn btn-primary">Next Shift</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Shift Timed Out (Rush Hour Failure) -->
+  <div id="modal-timeout" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="timeout-title">
+    <div class="modal-window victory-card">
+      <div class="victory-header">
+        <div class="victory-medal" aria-hidden="true">⌛</div>
+        <span class="badge-tag" style="color: var(--color-orange); background-color: rgba(196, 91, 40, 0.15);">Rush Hour Ended</span>
+        <h2 id="timeout-title" class="victory-heading">Ticket Backlog!</h2>
+        <p class="victory-sub" id="timeout-subtext">The 75-second Rush Hour sprint elapsed before all tickets were cleared.</p>
+      </div>
+
+      <div class="stats-matrix">
+        <div class="stat-cell">
+          <span class="stat-label">Score Earned</span>
+          <span class="stat-val text-gold" id="timeout-score">0</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Pairs Matched</span>
+          <span class="stat-val" id="timeout-pairs">0 / 5</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Peak Streak</span>
+          <span class="stat-val text-accent" id="timeout-streak">0x</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-label">Accuracy</span>
+          <span class="stat-val" id="timeout-accuracy">0%</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-timeout-menu" class="btn btn-secondary">Main Menu</button>
+        <button id="btn-timeout-codex" class="btn btn-secondary">Study Codex</button>
+        <button id="btn-timeout-retry" class="btn btn-primary">Retry Rush</button>
       </div>
     </div>
   </div>
@@ -361,33 +406,35 @@
       <div class="handbook-content">
         <div class="handbook-section">
           <h3>The Core Objective</h3>
-          <p>You are stationed at the service rail. Match each <strong>Cocktail Identity Card</strong> (title, family, glass) to its authentic <strong>Recipe &amp; Spec Card</strong> (exact formula, preparation method, and tasting profile).</p>
+          <p>You are stationed at the service rail. Match each <strong>Cocktail Identity Card</strong> (title, family, glass) to its authentic <strong>Recipe &amp; Spec Card</strong> (exact formula, preparation technique, and tasting profile).</p>
         </div>
         <div class="handbook-section">
-          <h3>The Card Types</h3>
+          <h3>Card Architecture</h3>
           <div class="rule-card-sample">
             <div class="sample-box name-sample">
               <strong>Drink Identity</strong>
-              <span>Name • Spirit • Glass</span>
+              <span>Name • Spirit • Glassware</span>
             </div>
             <div class="sample-divider" aria-hidden="true">↔</div>
             <div class="sample-box spec-sample">
               <strong>Formula &amp; Method</strong>
-              <span>Exact Ratios • Ice • Garnish</span>
+              <span>Exact Ounces • Ice • Garnish</span>
             </div>
           </div>
         </div>
         <div class="handbook-section">
-          <h3>Educational Near-Miss Diagnostics</h3>
-          <p>When you select two mismatched cards, our bar intelligence engine diagnoses their structural relationship (such as shared spirits or contrasting shaken vs stirred methods) to aid memory retention.</p>
+          <h3>Difficulty Tiers &amp; Progression</h3>
+          <p>• <strong>Apprentice:</strong> Relaxed count-up timer, standard 250pt matches. Master drinks to level up.<br>
+             • <strong>Bartender:</strong> Unlocks after 1 successful shift. 300pt matches with strict accuracy pacing.<br>
+             • <strong>Head Bartender:</strong> Unlocks after mastering 4 drinks. High-intensity 75s Rush Hour with miss penalties.</p>
         </div>
         <div class="handbook-section">
-          <h3>Tip Streaks &amp; Shift Tiers</h3>
-          <p>Consecutive correct pairings build your tip streak multiplier up to <strong>3.0x</strong>. Resetting records or clearing high scores persists in your device memory.</p>
+          <h3>Tip Multipliers &amp; Near-Miss Clues</h3>
+          <p>Consecutive correct pairings build your tip streak multiplier up to <strong>3.0x</strong>. Mismatches analyze differences in base spirit, method, or glass style to help you memorize the spec.</p>
         </div>
       </div>
       <div class="modal-actions">
-        <button id="btn-reset-data" class="btn btn-tertiary btn-sm text-accent">Reset All Data</button>
+        <button id="btn-reset-data" class="btn btn-tertiary btn-sm text-accent">Reset Bar Records</button>
         <button id="btn-close-handbook-cta" class="btn btn-primary">Return to Station</button>
       </div>
     </div>

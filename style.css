@@ -40,7 +40,7 @@
 
   --transition-fast: 0.15s ease;
   --transition-normal: 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
-  --transition-flip: 0.45s cubic-bezier(0.34, 1.25, 0.64, 1);
+  --transition-flip: 0.42s cubic-bezier(0.34, 1.2, 0.64, 1);
 
   --hit-target-min: 44px;
 }
@@ -78,9 +78,9 @@ body {
   position: fixed;
   inset: 0;
   background: 
-    radial-gradient(circle at 50% 12%, rgba(196, 91, 40, 0.12) 0%, transparent 60%),
-    radial-gradient(circle at 50% 88%, rgba(217, 166, 58, 0.08) 0%, transparent 65%),
-    radial-gradient(circle at 50% 50%, transparent 35%, rgba(10, 6, 3, 0.85) 100%);
+    radial-gradient(circle at 50% 10%, rgba(196, 91, 40, 0.14) 0%, transparent 55%),
+    radial-gradient(circle at 50% 90%, rgba(217, 166, 58, 0.10) 0%, transparent 65%),
+    radial-gradient(circle at 50% 50%, transparent 35%, rgba(10, 6, 3, 0.88) 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -99,7 +99,7 @@ body {
   height: 100dvh;
   margin: 0 auto;
   padding-top: max(6px, env(safe-area-inset-top));
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
   padding-left: max(10px, env(safe-area-inset-left));
   padding-right: max(10px, env(safe-area-inset-right));
 }
@@ -127,31 +127,32 @@ body {
    -------------------------------------------------------------------------- */
 #view-menu {
   justify-content: space-between;
-  padding: 10px 4px;
+  padding: 8px 4px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .menu-brand-header {
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .brand-crest-lg {
   display: inline-grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 50px;
+  height: 50px;
   background: linear-gradient(135deg, var(--bg-surface-elevated), #1a0f07);
   border: 1px solid var(--color-gold);
   border-radius: var(--radius-md);
   color: var(--color-gold);
   box-shadow: 0 0 16px var(--color-gold-glow);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .menu-title {
   font-family: var(--font-serif);
-  font-size: 1.55rem;
+  font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #fff;
@@ -160,7 +161,7 @@ body {
 }
 
 .menu-tagline {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--color-gold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -173,7 +174,7 @@ body {
   border: 1px solid var(--color-wood-border-bright);
   border-radius: var(--radius-md);
   padding: 10px 14px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .records-header {
@@ -228,17 +229,28 @@ body {
 
 /* Tier Selector Menu */
 .menu-section {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
 .section-label {
-  display: block;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin-bottom: 6px;
+}
+
+.tier-status-hint {
+  font-size: 0.64rem;
+  color: var(--color-gold);
+  font-weight: 600;
 }
 
 .tier-selector-menu {
@@ -248,6 +260,7 @@ body {
 }
 
 .tier-card {
+  position: relative;
   background-color: var(--bg-surface);
   border: 1px solid var(--color-wood-border);
   border-radius: var(--radius-md);
@@ -257,15 +270,21 @@ body {
   transition: all var(--transition-fast);
 }
 
-.tier-card:hover {
+.tier-card:hover:not(.locked) {
   border-color: var(--color-wood-border-bright);
   background-color: var(--bg-surface-elevated);
 }
 
 .tier-card.active {
   border-color: var(--color-gold);
-  background: linear-gradient(135deg, rgba(196, 91, 40, 0.15), var(--bg-surface-elevated));
+  background: linear-gradient(135deg, rgba(196, 91, 40, 0.16), var(--bg-surface-elevated));
   box-shadow: 0 0 10px var(--color-gold-glow);
+}
+
+.tier-card.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: rgba(20, 12, 8, 0.6);
 }
 
 .tier-card-head {
@@ -281,9 +300,29 @@ body {
   color: #fff;
 }
 
+.pill-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.pill-badge.status-unlocked {
+  background-color: rgba(217, 166, 58, 0.15);
+  color: var(--color-gold);
+}
+
+.pill-badge.status-locked {
+  background-color: rgba(255, 80, 80, 0.12);
+  color: #e59a9a;
+}
+
 .tier-desc {
   font-size: 0.72rem;
   color: var(--text-secondary);
+  line-height: 1.25;
 }
 
 /* Menu Actions Stack */
@@ -291,7 +330,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .menu-sub-actions {
@@ -300,7 +339,7 @@ body {
   gap: 6px;
 }
 
-/* Home Portal Button at Menu Bottom */
+/* Home Portal Button */
 .menu-footer-home {
   margin-top: auto;
   padding-top: 8px;
@@ -369,7 +408,7 @@ body {
 
 /* HUD BAR */
 .hud-bar {
-  margin-top: 6px;
+  margin-top: 5px;
   flex-shrink: 0;
 }
 
@@ -420,7 +459,7 @@ body {
 
 /* FEEDBACK BANNER */
 .feedback-anchor {
-  margin: 6px 0 4px;
+  margin: 5px 0 3px;
   flex-shrink: 0;
 }
 
@@ -433,17 +472,17 @@ body {
   border: 1px solid var(--color-wood-border);
   background-color: var(--bg-surface);
   transition: all var(--transition-normal);
-  min-height: 42px;
+  min-height: 40px;
 }
 
 .feedback-banner.correct {
   border-color: var(--color-gold);
-  background: linear-gradient(90deg, rgba(217, 166, 58, 0.14), var(--bg-surface));
+  background: linear-gradient(90deg, rgba(217, 166, 58, 0.16), var(--bg-surface));
 }
 
 .feedback-banner.mismatch {
   border-color: var(--color-orange);
-  background: linear-gradient(90deg, rgba(196, 91, 40, 0.16), var(--bg-surface));
+  background: linear-gradient(90deg, rgba(196, 91, 40, 0.18), var(--bg-surface));
 }
 
 .feedback-icon {
@@ -474,7 +513,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* PLAYFIELD & CARD GRID (MINIMIZED SCROLLING) */
+/* PLAYFIELD CONTAINER & CARD RAIL */
 .playfield-container {
   flex: 1;
   display: flex;
@@ -487,8 +526,8 @@ body {
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
   height: 100%;
@@ -530,7 +569,7 @@ body {
 
 .memory-card.matched .card-face-front {
   border-color: var(--color-gold);
-  box-shadow: 0 0 12px rgba(217, 166, 58, 0.4);
+  box-shadow: 0 0 14px rgba(217, 166, 58, 0.45);
 }
 
 .memory-card.shake {
@@ -558,7 +597,7 @@ body {
   box-shadow: var(--shadow-card);
 }
 
-/* Card Back */
+/* Card Back Face */
 .card-face-back {
   background: radial-gradient(circle at 50% 45%, #2c1a10 0%, var(--bg-card-back) 100%);
   display: flex;
@@ -599,14 +638,17 @@ body {
   text-transform: uppercase;
 }
 
-/* Card Front */
+/* Card Front Face & Contained Content */
 .card-face-front {
   transform: rotateY(180deg);
-  padding: 8px;
+  padding: 7px;
   text-align: left;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .card-face-front.type-identity {
@@ -625,15 +667,16 @@ body {
   justify-content: space-between;
   border-bottom: 1px solid rgba(217, 166, 58, 0.2);
   padding-bottom: 2px;
+  flex-shrink: 0;
 }
 
 .card-face-front.type-identity .cocktail-name {
   font-family: var(--font-serif);
-  font-size: 0.92rem;
+  font-size: 0.90rem;
   font-weight: 700;
   color: #ffffff;
-  line-height: 1.2;
-  margin: 4px 0 2px;
+  line-height: 1.18;
+  margin: 3px 0 2px;
 }
 
 .card-face-front.type-identity .cocktail-meta-group {
@@ -641,10 +684,11 @@ body {
   flex-wrap: wrap;
   gap: 3px;
   margin-top: auto;
+  flex-shrink: 0;
 }
 
 .mini-pill {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   padding: 1px 4px;
   border-radius: var(--radius-sm);
   background-color: rgba(255, 255, 255, 0.06);
@@ -669,18 +713,19 @@ body {
   align-items: center;
   border-bottom: 1px dashed rgba(94, 70, 53, 0.3);
   padding-bottom: 2px;
+  flex-shrink: 0;
 }
 
 .spec-formula {
-  font-size: 0.72rem;
+  font-size: 0.70rem;
   font-weight: 600;
-  line-height: 1.28;
+  line-height: 1.24;
   color: var(--text-dark);
   margin: 3px 0 auto;
 }
 
 .spec-sensory {
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   color: var(--text-dark-muted);
   font-style: italic;
   line-height: 1.2;
@@ -688,7 +733,7 @@ body {
 }
 
 .spec-method-badge {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 700;
   text-transform: uppercase;
   color: #3b2416;
@@ -696,7 +741,8 @@ body {
   padding: 1px 5px;
   border-radius: var(--radius-sm);
   align-self: flex-start;
-  margin-top: 4px;
+  margin-top: 3px;
+  flex-shrink: 0;
 }
 
 /* COMMAND RAIL (FOOTER) */
@@ -773,6 +819,11 @@ body {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+.btn-tertiary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn-lg {
   min-height: 48px;
   font-size: 0.95rem;
@@ -813,7 +864,7 @@ body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(8, 5, 3, 0.85);
+  background-color: rgba(8, 5, 3, 0.86);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   z-index: 100;
@@ -835,7 +886,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slide-up 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slide-up {
@@ -853,14 +904,16 @@ body {
   background-color: var(--bg-surface-elevated);
 }
 
-/* Victory Modal */
+/* Victory & Timeout Cards */
 .victory-card {
   text-align: center;
-  padding: 20px 16px 0;
+  padding: 18px 16px 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .victory-medal {
-  font-size: 2.5rem;
+  font-size: 2.4rem;
   line-height: 1;
   margin-bottom: 6px;
 }
@@ -888,8 +941,9 @@ body {
 .victory-sub {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  max-width: 360px;
+  max-width: 380px;
   margin: 0 auto 12px;
+  line-height: 1.35;
 }
 
 .stats-matrix {
@@ -938,8 +992,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  max-height: 90px;
+  max-height: 100px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .recap-badge {
@@ -952,6 +1007,16 @@ body {
   border: 1px solid var(--color-wood-border);
   font-size: 0.72rem;
   color: var(--text-primary);
+}
+
+.recap-badge .badge-new-master {
+  font-size: 0.58rem;
+  background-color: var(--color-gold);
+  color: var(--bg-primary);
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  margin-left: 3px;
 }
 
 /* Codex Drawer */
@@ -1046,6 +1111,7 @@ body {
 .codex-entries-list {
   flex: 1;
   overflow-y: auto;
+  scrollbar-width: thin;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
@@ -1057,6 +1123,7 @@ body {
   border: 1px solid var(--color-wood-border);
   border-radius: var(--radius-md);
   padding: 10px 12px;
+  position: relative;
 }
 
 .codex-card-header {
@@ -1071,6 +1138,17 @@ body {
   font-family: var(--font-serif);
   font-size: 1.05rem;
   color: var(--color-gold);
+}
+
+.mastered-stamp {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background-color: rgba(217, 166, 58, 0.12);
 }
 
 .codex-drink-spec {
@@ -1108,6 +1186,7 @@ body {
 .handbook-content {
   padding: 12px 14px;
   overflow-y: auto;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1163,26 +1242,33 @@ body {
    RESPONSIVE DESIGN & MOBILE OPTIMIZATIONS
    -------------------------------------------------------------------------- */
 @media (max-width: 600px) {
-  /* 10 cards arrange as 2 columns × 5 rows on mobile portrait to fit view */
+  /* 10 cards arranged as 2 columns × 5 rows on portrait view */
   .card-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(5, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(5, minmax(0, 1fr));
     gap: 6px;
   }
 
-  .spec-sensory { display: none; }
-  
+  .card-face-front {
+    padding: 5px;
+  }
+
   .card-face-front.type-identity .cocktail-name {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
   }
 
   .spec-formula {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     line-height: 1.2;
   }
 
-  .brand-title { font-size: 0.92rem; }
-  .brand-subtitle { font-size: 0.6rem; }
+  .spec-sensory {
+    font-size: 0.54rem;
+    line-height: 1.15;
+  }
+
+  .brand-title { font-size: 0.94rem; }
+  .brand-subtitle { font-size: 0.62rem; }
 
   .menu-sub-actions {
     grid-template-columns: 1fr;
@@ -1192,14 +1278,16 @@ body {
 /* Mobile landscape orientation */
 @media (max-height: 520px) and (orientation: landscape) {
   .card-grid {
-    grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
     gap: 5px;
   }
 
-  .spec-sensory { display: none; }
+  .card-face-front { padding: 4px; }
   .hud-bar { margin-top: 2px; }
   .feedback-anchor { margin: 2px 0; }
+  .feedback-banner { min-height: 34px; padding: 3px 8px; }
+  .metrics-strip { padding: 4px 8px; }
 }
 
 /* Reduced motion support */
