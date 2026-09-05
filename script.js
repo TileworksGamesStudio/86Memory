@@ -1026,7 +1026,7 @@ const COCKTAILS_DB = [
     origin: 'Created by Harry Johnson in 1895; named "Bijou" (jewel) for the colors of its three key ingredients.',
     pitfall: 'Shaking the drink; Green Chartreuse and gin become cloudy and bitter when violently shaken.'
   }
-];
+],
 
 /* ==========================================================================
    2. DATA VALIDATION
