@@ -1,972 +1,536 @@
 /**
  * ============================================================================
- * COCKTAIL MEMORY — GAME ENGINE
- * Architecture: Platform Shell + Deterministic Scheduler + Audio Synthesis
- * Release Standard: 8 September 2026 = Day 0
- * Contract: Reads COCKTAIL_MEMORY_PUZZLES from puzzles.js without modifying data
+ * COCKTAIL MEMORY — STATIC PRODUCTION ENGINE
  * ============================================================================
  */
 
 (function () {
   'use strict';
 
-  // 1. CONFIGURATION & TIME ENGINE
-  // Baseline publication epoch: 8 September 2026 (Day 0)
-  const EPOCH_YEAR = 2026;
-  const EPOCH_MONTH = 8; // September (0-indexed)
-  const EPOCH_DAY = 8;
-  const EPOCH_DATE = new Date(EPOCH_YEAR, EPOCH_MONTH, EPOCH_DAY, 0, 0, 0);
+  const CONFIG = {
+    puzzleCsvPath: './puzzles.csv',
+    releaseTimeZone: 'Europe/London'
+  };
 
   const STORAGE_KEY = 'cocktail_memory_v2';
-  const OLD_STORAGE_KEY = 'cocktail_memory_v1';
 
-  // 2. STATE REPOSITORY
   const state = {
-    todayDayIndex: 0,
-    activeDayIndex: 0,
-    activeScreen: 'menu', // 'menu' | 'game'
-    puzzle: null,
+    todayDate: null,
+    currentRelease: null,
+    vaultReleases: [],
+    activeRelease: null, // The puzzle currently being viewed/played
+    activeScreen: 'init', // init, menu, game
     boardCards: [],
-    flippedCardIndices: [],
-    matchedPairIds: new Set(),
+    flippedIndices: [],
+    matchedIds: new Set(),
     turns: 0,
     mismatches: 0,
-    startTime: null,
-    endTime: null,
     isLocked: false,
-    isCompleted: false,
     soundEnabled: true,
     userStats: {
-      storageVersion: 2,
       played: 0,
       completed: 0,
       currentStreak: 0,
       bestStreak: 0,
       bestTurns: null,
       turnHistory: [],
-      completedPuzzles: {} // dayIndex -> { puzzleId, turns, accuracy, time, date }
+      completedPuzzles: {} // date -> { turns, accuracy }
     }
   };
 
-  // 3. SOUND SYNTHESIS ENGINE (Web Audio API)
+  // --- AUDIO ---
   let audioCtx = null;
-
-  function initAudioContext() {
+  function initAudio() {
     if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AudioContextClass();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
     }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   }
-
-  function playTone(freq, type, duration, gainValue, decay = true) {
+  function playTone(freq, type, duration, gainValue) {
     if (!state.soundEnabled) return;
     try {
-      initAudioContext();
+      initAudio();
       if (!audioCtx) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-
       osc.type = type;
       osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
       gain.gain.setValueAtTime(gainValue, audioCtx.currentTime);
-      if (decay) {
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-      } else {
-        gain.gain.setValueAtTime(0, audioCtx.currentTime + duration);
-      }
-
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-
       osc.start();
       osc.stop(audioCtx.currentTime + duration);
-    } catch (e) {
-      // Gracefully ignore autoplay browser restrictions
-    }
+    } catch (e) {}
   }
-
-  const BarSound = {
-    flip() {
-      playTone(580, 'sine', 0.08, 0.14);
-    },
-    match() {
+  const Sound = {
+    flip: () => playTone(580, 'sine', 0.08, 0.14),
+    match: () => {
       setTimeout(() => playTone(659.25, 'triangle', 0.2, 0.2), 0);
       setTimeout(() => playTone(987.77, 'sine', 0.35, 0.22), 100);
     },
-    mismatch() {
+    mismatch: () => {
       playTone(180, 'sine', 0.12, 0.16);
       setTimeout(() => playTone(140, 'sine', 0.14, 0.14), 110);
     },
-    victory() {
-      const notes = [440, 554.37, 659.25, 880];
-      notes.forEach((note, i) => {
-        setTimeout(() => playTone(note, 'triangle', 0.4, 0.22), i * 110);
-      });
-    },
-    click() {
-      playTone(800, 'sine', 0.04, 0.08);
-    }
+    win: () => [440, 554.37, 659.25, 880].forEach((n, i) => setTimeout(() => playTone(n, 'triangle', 0.4, 0.22), i * 110)),
+    click: () => playTone(800, 'sine', 0.04, 0.08)
   };
 
-  // 4. DETERMINISTIC DAILY SCHEDULING ARCHITECTURE
-  /**
-   * Day 0 = 8 September 2026.
-   * Vault contains 0 historical items on Day 0.
-   * Day 1 (9 September 2026) moves Day 0 to Vault.
-   * For testing, supports non-intrusive URL parameter: ?day=X
-   */
-  function getCurrentDayIndex() {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('day')) {
-        const testDay = parseInt(urlParams.get('day'), 10);
-        if (!isNaN(testDay) && testDay >= 0) {
-          return testDay;
-        }
-      }
-    } catch (e) {
-      // Ignore URL parsing errors
-    }
+  // --- DATA PIPELINE ---
+  async function fetchAuthoritativeDate() {
+    // Same-origin GET request to determine authoritative timestamp
+    const url = window.location.href.split('#')[0].split('?')[0];
+    const res = await fetch(url + '?_cb=' + Date.now(), { method: 'GET', cache: 'no-store' });
+    const dateHeader = res.headers.get('Date');
+    if (!dateHeader) throw new Error("TIME_UNAVAILABLE");
 
-    const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const diffMs = todayMidnight.getTime() - EPOCH_DATE.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays);
+    const d = new Date(dateHeader);
+    if (isNaN(d.getTime())) throw new Error("TIME_UNAVAILABLE");
+
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: CONFIG.releaseTimeZone, year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const parts = formatter.formatToParts(d);
+    let y, m, day;
+    for (const p of parts) {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') m = p.value;
+      if (p.type === 'day') day = p.value;
+    }
+    return `${y}-${m}-${day}`;
   }
 
-  /**
-   * Safe Historical Continuity Resolver:
-   * 1. If player completed this dayIndex, preserves that exact puzzle ID forever.
-   * 2. When new puzzles are appended to puzzles.js, historical indices remain stable.
-   */
-  function getPuzzleForDayIndex(dayIndex) {
-    const catalog = window.COCKTAIL_MEMORY_PUZZLES || [];
-    if (!catalog.length) {
-      throw new Error('No puzzles found in COCKTAIL_MEMORY_PUZZLES.');
+  function parseCSV(text) {
+    const rows = [];
+    let curRow = [], curCell = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i], next = text[i + 1];
+      if (inQuotes) {
+        if (c === '"' && next === '"') { curCell += '"'; i++; }
+        else if (c === '"') inQuotes = false;
+        else curCell += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ',') { curRow.push(curCell); curCell = ''; }
+        else if (c === '\n' || c === '\r') {
+          curRow.push(curCell); rows.push(curRow); curRow = []; curCell = '';
+          if (c === '\r' && next === '\n') i++;
+        } else curCell += c;
+      }
     }
-
-    // Historical completion lock
-    const record = state.userStats.completedPuzzles[dayIndex];
-    if (record && record.puzzleId) {
-      const found = catalog.find((p) => p.id === record.puzzleId);
-      if (found) return found;
-    }
-
-    // Deterministic release sequence with seamless cycle
-    const index = dayIndex % catalog.length;
-    return catalog[index];
+    if (curCell || curRow.length) { curRow.push(curCell); rows.push(curRow); }
+    return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
   }
 
-  // 5. LOCAL STORAGE & DATA MIGRATION
-  function loadStoredData() {
-    try {
-      let raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        const rawV1 = localStorage.getItem(OLD_STORAGE_KEY);
-        if (rawV1) raw = rawV1;
+  function mapCsvToObjects(headers, rows) {
+    return rows.map(r => {
+      const obj = {};
+      headers.forEach((h, i) => obj[h.trim()] = r[i] || '');
+      const pairs = [];
+      for(let i = 1; i <= 8; i++) {
+        pairs.push({
+          id: obj[`pair_${i}_id`], name: obj[`pair_${i}_name`],
+          glass: obj[`pair_${i}_glass`], spec: obj[`pair_${i}_spec`],
+          lore: obj[`pair_${i}_lore`], iconSvg: obj[`pair_${i}_svg`]
+        });
       }
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        if (parsed.userStats) {
-          state.userStats = { ...state.userStats, ...parsed.userStats };
-        }
-        if (typeof parsed.soundEnabled === 'boolean') {
-          state.soundEnabled = parsed.soundEnabled;
-        }
-      }
-    } catch (err) {
-      console.warn('Storage corrupted or unavailable; starting fresh.');
-    }
-  }
-
-  function saveStoredData() {
-    try {
-      const payload = {
-        soundEnabled: state.soundEnabled,
-        userStats: state.userStats
+      return {
+        release_date: obj.release_date, id: obj.puzzle_id,
+        title: obj.title, difficulty: obj.difficulty,
+        category: obj.category, description: obj.description, pairs
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    } catch (err) {
-      // Storage quota or private mode
-    }
+    });
   }
 
-  // 6. PSEUDO-RANDOM DETERMINISTIC SHUFFLE
+  async function loadApplicationData() {
+    const [csvRes, ukDate] = await Promise.all([
+      fetch(CONFIG.puzzleCsvPath, { cache: 'no-store' }).then(r => {
+        if (!r.ok) throw new Error("DATA_UNAVAILABLE");
+        return r.text();
+      }),
+      fetchAuthoritativeDate()
+    ]);
+
+    const rows = parseCSV(csvRes);
+    if (rows.length < 2 || rows[0][0] !== 'release_date') throw new Error("DATA_INVALID");
+
+    const records = mapCsvToObjects(rows[0], rows.slice(1));
+    let currentMatches = [];
+    const vault = [];
+
+    records.forEach(rec => {
+      if (!rec.release_date || !/^\d{4}-\d{2}-\d{2}$/.test(rec.release_date)) return;
+      if (rec.release_date < ukDate) vault.push(rec);
+      else if (rec.release_date === ukDate) currentMatches.push(rec);
+    });
+
+    if (currentMatches.length > 1) throw new Error("DUPLICATE_RELEASE");
+    if (currentMatches.length === 0) throw new Error("MISSING_RELEASE");
+
+    state.todayDate = ukDate;
+    state.currentRelease = currentMatches[0];
+    state.vaultReleases = vault.sort((a, b) => b.release_date.localeCompare(a.release_date));
+  }
+
+  // --- STORAGE ---
+  function loadStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.userStats) state.userStats = { ...state.userStats, ...parsed.userStats };
+        if (typeof parsed.soundEnabled === 'boolean') state.soundEnabled = parsed.soundEnabled;
+      }
+    } catch (e) {}
+  }
+  function saveStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        soundEnabled: state.soundEnabled, userStats: state.userStats
+      }));
+    } catch (e) {}
+  }
+
+  // --- ENGINE ---
   function seededRandom(seed) {
     const x = Math.sin(seed++) * 10000;
     return x - Math.floor(x);
   }
-
-  function shuffleArrayDeterministic(array, seedVal) {
-    const shuffled = [...array];
+  function shuffleDeterministic(array, seedVal) {
+    const shuf = [...array];
     let s = seedVal;
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    for (let i = shuf.length - 1; i > 0; i--) {
       s++;
       const j = Math.floor(seededRandom(s) * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      [shuf[i], shuf[j]] = [shuf[j], shuf[i]];
     }
-    return shuffled;
+    return shuf;
   }
 
-  // 7. BOARD GENERATION
-  function buildBoardForPuzzle(puzzle, dayIndex) {
-    const rawCards = [];
-    puzzle.pairs.forEach((cocktail) => {
-      for (let side = 1; side <= 2; side++) {
-        rawCards.push({
-          uid: `${cocktail.id}_${side}`,
-          pairId: cocktail.id,
-          name: cocktail.name,
-          glass: cocktail.glass,
-          spec: cocktail.spec,
-          lore: cocktail.lore,
-          iconSvg: cocktail.iconSvg || getDefaultGlassSvg()
-        });
-      }
-    });
-
-    const seed = (dayIndex + 1) * 31337;
-    return shuffleArrayDeterministic(rawCards, seed);
+  // --- UI RENDERERS ---
+  function showScreen(id) {
+    state.activeScreen = id;
+    document.querySelectorAll('.screen-view').forEach(el => el.classList.remove('active'));
+    document.getElementById(`screen-${id}`).classList.add('active');
   }
 
-  function getDefaultGlassSvg() {
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M5 4h14l-4 8H9L5 4z"></path>
-      <line x1="12" y1="12" x2="12" y2="19"></line>
-      <line x1="8" y1="19" x2="16" y2="19"></line>
-    </svg>`;
+  function showErrorUI(code) {
+    const msgs = {
+      DATA_UNAVAILABLE: "Puzzle data could not be loaded.",
+      DATA_INVALID: "Puzzle data could not be loaded.",
+      TIME_UNAVAILABLE: "Today's puzzle could not be verified.",
+      MISSING_RELEASE: "Today's puzzle is not available.",
+      DUPLICATE_RELEASE: "Today's puzzle is not available."
+    };
+    document.getElementById('init-title').textContent = "UNAVAILABLE";
+    document.getElementById('init-message').textContent = msgs[code] || "A system error occurred.";
+    const retryBtn = document.getElementById('btn-init-retry');
+    retryBtn.classList.remove('hidden');
+    retryBtn.onclick = () => {
+      document.getElementById('init-title').textContent = "LOADING";
+      document.getElementById('init-message').textContent = "Verifying today's release...";
+      retryBtn.classList.add('hidden');
+      initApp();
+    };
+    showScreen('init');
   }
 
-  // 8. GARNISH BACKGROUND SYSTEM
-  const GARNISH_SVGS = [
-    // 1. Mint Sprig
-    `<svg width="34" height="34" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 32V10"></path><path d="M18 24c-5-2-9-7-7-12 5 2 9 7 7 12z"></path><path d="M18 18c5-2 9-7 7-12-5 2-9 7-7 12z"></path><path d="M18 12c-4-2-6-5-5-8 4 1 6 5 5 8z"></path></svg>`,
-    // 2. Lemon / Orange Twist Spiral
-    `<svg width="32" height="32" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 30c8-4 12-14 8-22s-2-2 4 1 8 10 5 17"></path><path d="M10 26c6-4 10-12 6-18"></path></svg>`,
-    // 3. Dehydrated Citrus Wheel
-    `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="18" r="15"></circle><circle cx="18" cy="18" r="12" stroke-dasharray="2 2"></circle><circle cx="18" cy="18" r="3"></circle><line x1="18" y1="3" x2="18" y2="15"></line><line x1="18" y1="21" x2="18" y2="33"></line><line x1="3" y1="18" x2="15" y2="18"></line><line x1="21" y1="18" x2="33" y2="18"></line><line x1="7.4" y1="7.4" x2="15.9" y2="15.9"></line><line x1="20.1" y1="20.1" x2="28.6" y2="28.6"></line><line x1="7.4" y1="28.6" x2="15.9" y2="20.1"></line><line x1="20.1" y1="15.9" x2="28.6" y2="7.4"></line></svg>`,
-    // 4. Stemmed Cocktail Cherries
-    `<svg width="34" height="34" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6c0 6-7 10-7 17a5 5 0 1 0 10 0"></path><path d="M18 6c4 5 7 10 7 16a5 5 0 1 1-10 0"></path><path d="M18 6c-3-3-2-5 1-4"></path></svg>`,
-    // 5. Olive on Cocktail Skewer
-    `<svg width="32" height="32" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="6" y1="30" x2="30" y2="6"></line><ellipse cx="18" cy="18" rx="6" ry="9" transform="rotate(-45 18 18)"></ellipse><circle cx="18" cy="18" r="2"></circle></svg>`,
-    // 6. Rosemary Sprig
-    `<svg width="34" height="34" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="6" y1="30" x2="28" y2="8"></line><path d="M12 24l-3-4m5 2l4-3m-6 9l-4-3m9-2l-3-4m5 2l4-3m-6 9l-4-3"></path></svg>`
-  ];
+  function renderMenu() {
+    document.getElementById('menu-today-date').textContent = state.todayDate;
+    document.getElementById('menu-today-title').textContent = state.currentRelease.title;
+    document.getElementById('menu-today-diff').textContent = state.currentRelease.difficulty;
+    document.getElementById('menu-today-cat').textContent = state.currentRelease.category;
 
-  let garnishInterval = null;
+    const isDone = state.userStats.completedPuzzles[state.todayDate];
+    const statusText = document.getElementById('menu-today-status-text');
+    const playBtn = document.getElementById('btn-play-today');
 
-  function initGarnishSystem() {
-    const container = document.getElementById('garnish-container');
-    if (!container) return;
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return;
-    }
-
-    if (garnishInterval) clearInterval(garnishInterval);
-
-    garnishInterval = setInterval(() => {
-      const maxCount = state.activeScreen === 'menu' ? 4 : 2;
-      const currentCount = container.children.length;
-
-      if (currentCount < maxCount && Math.random() > 0.3) {
-        spawnGarnish(container);
-      }
-    }, 2400);
-  }
-
-  function spawnGarnish(container) {
-    const el = document.createElement('div');
-    el.className = 'garnish-particle';
-
-    const svgIndex = Math.floor(Math.random() * GARNISH_SVGS.length);
-    el.innerHTML = GARNISH_SVGS[svgIndex];
-
-    const left = 5 + Math.random() * 85;
-    const duration = state.activeScreen === 'menu' ? 16 + Math.random() * 10 : 20 + Math.random() * 8;
-    const rotStart = -25 + Math.random() * 50;
-    const rotEnd = rotStart + (-40 + Math.random() * 80);
-
-    el.style.left = `${left}%`;
-    el.style.animationDuration = `${duration}s`;
-    el.style.setProperty('--rot-end', `${rotEnd}deg`);
-    el.style.transform = `rotate(${rotStart}deg)`;
-
-    container.appendChild(el);
-
-    el.addEventListener('animationend', () => {
-      if (el.parentNode) el.parentNode.removeChild(el);
-    });
-  }
-
-  // 9. DOM ELEMENTS
-  const DOM = {
-    // Screens
-    screenMenu: document.getElementById('screen-menu'),
-    screenGame: document.getElementById('screen-game'),
-    // Main Menu
-    menuTodayDay: document.getElementById('menu-today-day-label'),
-    menuTodayTitle: document.getElementById('menu-today-title'),
-    menuTodayDiff: document.getElementById('menu-today-diff'),
-    menuTodayCat: document.getElementById('menu-today-cat'),
-    menuTodayStatusText: document.getElementById('menu-today-status-text'),
-    menuTodayCard: document.getElementById('menu-today-card'),
-    btnPlayToday: document.getElementById('btn-play-today'),
-    btnPlayTodayText: document.getElementById('btn-play-today-text'),
-    btnMenuOpenVault: document.getElementById('btn-menu-open-vault'),
-    btnMenuStats: document.getElementById('btn-menu-stats'),
-    btnMenuHow: document.getElementById('btn-menu-how'),
-    btnMenuSound: document.getElementById('btn-menu-sound'),
-    menuSoundText: document.querySelector('.sound-pill-text'),
-    menuVaultSummary: document.getElementById('menu-vault-summary'),
-    // Game Screen
-    btnBackMenu: document.getElementById('btn-back-menu'),
-    btnGameSound: document.getElementById('btn-game-sound'),
-    btnGameStats: document.getElementById('btn-game-stats'),
-    btnGameHow: document.getElementById('btn-game-how'),
-    btnRestartBoard: document.getElementById('btn-restart-board'),
-    btnGameVault: document.getElementById('btn-game-vault'),
-    dayLabel: document.getElementById('puzzle-day-label'),
-    diffBadge: document.getElementById('puzzle-diff-badge'),
-    catBadge: document.getElementById('puzzle-category-badge'),
-    turnsLabel: document.getElementById('stat-turns'),
-    pairsLabel: document.getElementById('stat-pairs'),
-    accLabel: document.getElementById('stat-accuracy'),
-    toast: document.getElementById('toast-banner'),
-    board: document.getElementById('game-board'),
-    // Modals
-    modalOverlay: document.getElementById('modal-overlay'),
-    modalHow: document.getElementById('modal-how'),
-    modalStats: document.getElementById('modal-stats'),
-    modalVault: document.getElementById('modal-vault'),
-    modalVictory: document.getElementById('modal-victory'),
-    vaultList: document.getElementById('vault-list'),
-    vaultEmptyState: document.getElementById('vault-empty-state'),
-    // Victory elements
-    vTurns: document.getElementById('v-turns'),
-    vAcc: document.getElementById('v-acc'),
-    vTime: document.getElementById('v-time'),
-    vRankPill: document.getElementById('victory-rank-pill'),
-    vCocktailsList: document.getElementById('victory-cocktails-list'),
-    btnShare: document.getElementById('btn-share-result'),
-    btnVictoryMenu: document.getElementById('btn-victory-menu'),
-    btnVictoryVault: document.getElementById('btn-victory-vault'),
-    timerNext: document.getElementById('next-puzzle-timer')
-  };
-
-  // 10. SCREEN SWITCHER
-  function showScreen(screenId) {
-    state.activeScreen = screenId;
-    closeAllModals();
-
-    if (screenId === 'menu') {
-      DOM.screenMenu.classList.add('active');
-      DOM.screenGame.classList.remove('active');
-      renderMainMenu();
+    if (isDone) {
+      statusText.textContent = `Completed: ${isDone.turns} Turns (${isDone.accuracy})`;
+      playBtn.textContent = 'REPLAY';
     } else {
-      DOM.screenMenu.classList.remove('active');
-      DOM.screenGame.classList.add('active');
+      statusText.textContent = "Ready for service";
+      playBtn.textContent = 'PLAY';
     }
-  }
-
-  function renderMainMenu() {
-    const todayPuzzle = getPuzzleForDayIndex(state.todayDayIndex);
-    DOM.menuTodayDay.textContent = `DAY ${state.todayDayIndex}`;
-    DOM.menuTodayTitle.textContent = todayPuzzle.title;
-    DOM.menuTodayDiff.textContent = todayPuzzle.difficulty || 'EASY';
-    DOM.menuTodayDiff.className = `badge-pill badge-${(todayPuzzle.difficulty || 'easy').toLowerCase()}`;
-    DOM.menuTodayCat.textContent = todayPuzzle.category || 'Classic Cocktails';
-
-    const isTodayCompleted = state.userStats.completedPuzzles[state.todayDayIndex];
-    if (isTodayCompleted) {
-      DOM.menuTodayCard.classList.add('is-completed');
-      DOM.menuTodayStatusText.textContent = `Completed in ${isTodayCompleted.turns} turns (${isTodayCompleted.accuracy || '100%'} acc)`;
-      DOM.btnPlayTodayText.textContent = 'REPLAY TODAY';
-    } else if (state.activeDayIndex === state.todayDayIndex && state.turns > 0 && !state.isCompleted) {
-      DOM.menuTodayCard.classList.remove('is-completed');
-      DOM.menuTodayStatusText.textContent = `In Progress (${state.turns} turns taken)`;
-      DOM.btnPlayTodayText.textContent = 'RESUME PUZZLE';
-    } else {
-      DOM.menuTodayCard.classList.remove('is-completed');
-      DOM.menuTodayStatusText.textContent = 'Ready for service';
-      DOM.btnPlayTodayText.textContent = "PLAY TODAY'S PUZZLE";
-    }
-
-    const releasedVaultCount = state.todayDayIndex;
-    if (releasedVaultCount === 0) {
-      DOM.menuVaultSummary.textContent = '0 archived days (Cellar opens tomorrow)';
-    } else {
-      DOM.menuVaultSummary.textContent = `${releasedVaultCount} past vintage${releasedVaultCount > 1 ? 's' : ''} available`;
-    }
-
     syncSoundUI();
   }
 
-  // 11. BOARD RENDERING
-  function updateHeaderStats() {
-    DOM.turnsLabel.textContent = state.turns;
-    DOM.pairsLabel.textContent = `${state.matchedPairIds.size} / 8`;
+  function loadGame(releaseObj) {
+    state.activeRelease = releaseObj;
+    state.turns = 0;
+    state.mismatches = 0;
+    state.flippedIndices = [];
+    state.matchedIds = new Set();
+    state.isLocked = false;
 
-    if (state.turns === 0) {
-      DOM.accLabel.textContent = '100%';
-    } else {
-      const correctTurns = state.matchedPairIds.size;
-      const pct = Math.max(0, Math.round((correctTurns / state.turns) * 100));
-      DOM.accLabel.textContent = `${pct}%`;
-    }
-  }
+    document.getElementById('puzzle-date-label').textContent = releaseObj.release_date;
+    document.getElementById('puzzle-diff-badge').textContent = releaseObj.difficulty;
+    document.getElementById('puzzle-category-badge').textContent = releaseObj.category;
+    updateStatsUI();
 
-  function showToast(message, duration = 2500) {
-    DOM.toast.textContent = message;
-    DOM.toast.classList.add('visible');
-    clearTimeout(DOM.toast._timer);
-    DOM.toast._timer = setTimeout(() => {
-      DOM.toast.classList.remove('visible');
-    }, duration);
-  }
-
-  function renderGrid() {
-    DOM.board.innerHTML = '';
-
-    state.boardCards.forEach((card, index) => {
-      const cardBtn = document.createElement('button');
-      cardBtn.type = 'button';
-      cardBtn.className = 'memory-card';
-      cardBtn.dataset.index = index;
-      cardBtn.setAttribute('role', 'gridcell');
-      cardBtn.setAttribute('aria-label', `Cocktail card at position ${index + 1}, facedown`);
-
-      const isFlipped = state.flippedCardIndices.includes(index);
-      const isMatched = state.matchedPairIds.has(card.pairId);
-
-      if (isFlipped) cardBtn.classList.add('is-flipped');
-      if (isMatched) {
-        cardBtn.classList.add('is-matched');
-        cardBtn.setAttribute('aria-label', `${card.name}, matched`);
-        cardBtn.setAttribute('aria-disabled', 'true');
-      }
-
-      cardBtn.innerHTML = `
-        <div class="card-inner">
-          <!-- CARD BACK -->
-          <div class="card-face card-face-back" aria-hidden="true">
-            <svg class="card-back-pattern" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M12 3v18"></path>
-              <path d="M3 12h18"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          </div>
-          <!-- CARD FRONT -->
-          <div class="card-face card-face-front" aria-hidden="true">
-            <div class="card-cocktail-icon">${card.iconSvg}</div>
-            <div class="card-cocktail-name">${card.name}</div>
-            <div class="card-cocktail-glass">${card.glass}</div>
-          </div>
-        </div>
-      `;
-
-      cardBtn.addEventListener('click', () => handleCardSelection(index));
-      DOM.board.appendChild(cardBtn);
+    const rawCards = [];
+    releaseObj.pairs.forEach(p => {
+      rawCards.push({ ...p, side: 1 });
+      rawCards.push({ ...p, side: 2 });
     });
+    
+    // Seed based on date string
+    const seed = releaseObj.release_date.split('-').join('') * 1;
+    state.boardCards = shuffleDeterministic(rawCards, seed);
 
-    updateHeaderStats();
+    const board = document.getElementById('game-board');
+    board.innerHTML = '';
+    state.boardCards.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'memory-card';
+      btn.dataset.index = i;
+      btn.innerHTML = `
+        <div class="card-inner">
+          <div class="card-face card-face-back">
+            <svg class="card-back-pattern" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M3 12h18"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </div>
+          <div class="card-face card-face-front">
+            <div class="card-cocktail-icon">${c.iconSvg}</div>
+            <div class="card-cocktail-name">${c.name}</div>
+            <div class="card-cocktail-glass">${c.glass}</div>
+          </div>
+        </div>`;
+      btn.onclick = () => handleCardClick(i);
+      board.appendChild(btn);
+    });
   }
 
-  // 12. GAMEPLAY RULES & EVALUATION
-  function handleCardSelection(index) {
-    if (state.isLocked) return;
-    if (state.flippedCardIndices.includes(index)) return;
+  function updateStatsUI() {
+    document.getElementById('stat-turns').textContent = state.turns;
+    document.getElementById('stat-pairs').textContent = `${state.matchedIds.size} / 8`;
+    const acc = state.turns === 0 ? 100 : Math.max(0, Math.round((state.matchedIds.size / state.turns) * 100));
+    document.getElementById('stat-accuracy').textContent = `${acc}%`;
+  }
 
-    const selectedCard = state.boardCards[index];
-    if (state.matchedPairIds.has(selectedCard.pairId)) return;
+  function showToast(msg) {
+    const t = document.getElementById('toast-banner');
+    t.textContent = msg;
+    t.classList.add('visible');
+    clearTimeout(t._tmr);
+    t._tmr = setTimeout(() => t.classList.remove('visible'), 2000);
+  }
 
-    if (!state.startTime) {
-      state.startTime = Date.now();
-    }
+  function handleCardClick(idx) {
+    if (state.isLocked || state.flippedIndices.includes(idx)) return;
+    const card = state.boardCards[idx];
+    if (state.matchedIds.has(card.id)) return;
 
-    BarSound.flip();
-    state.flippedCardIndices.push(index);
+    Sound.flip();
+    state.flippedIndices.push(idx);
+    const cardEl = document.getElementById('game-board').children[idx];
+    cardEl.classList.add('is-flipped');
 
-    const cardEl = DOM.board.children[index];
-    if (cardEl) {
-      cardEl.classList.add('is-flipped');
-      cardEl.setAttribute('aria-label', `${selectedCard.name}, face up`);
-    }
-
-    if (state.flippedCardIndices.length === 2) {
+    if (state.flippedIndices.length === 2) {
       state.turns++;
-      updateHeaderStats();
+      updateStatsUI();
       evaluateTurn();
     }
   }
 
   function evaluateTurn() {
     state.isLocked = true;
-    const [firstIdx, secondIdx] = state.flippedCardIndices;
-    const firstCard = state.boardCards[firstIdx];
-    const secondCard = state.boardCards[secondIdx];
-
-    const isMatch = firstCard.pairId === secondCard.pairId;
+    const [i1, i2] = state.flippedIndices;
+    const c1 = state.boardCards[i1], c2 = state.boardCards[i2];
+    const isMatch = c1.id === c2.id;
+    const domBoard = document.getElementById('game-board');
 
     if (isMatch) {
       setTimeout(() => {
-        BarSound.match();
-        state.matchedPairIds.add(firstCard.pairId);
-
-        const card1 = DOM.board.children[firstIdx];
-        const card2 = DOM.board.children[secondIdx];
-        if (card1) {
-          card1.classList.add('is-matched');
-          card1.setAttribute('aria-disabled', 'true');
-          card1.setAttribute('aria-label', `${firstCard.name}, matched`);
-        }
-        if (card2) {
-          card2.classList.add('is-matched');
-          card2.setAttribute('aria-disabled', 'true');
-          card2.setAttribute('aria-label', `${secondCard.name}, matched`);
-        }
-
-        showToast(`Matched: ${firstCard.name}!`);
-        state.flippedCardIndices = [];
+        Sound.match();
+        state.matchedIds.add(c1.id);
+        domBoard.children[i1].classList.add('is-matched');
+        domBoard.children[i2].classList.add('is-matched');
+        showToast(`Matched: ${c1.name}`);
+        state.flippedIndices = [];
         state.isLocked = false;
-        updateHeaderStats();
-
-        if (state.matchedPairIds.size === 8) {
-          handlePuzzleComplete();
-        }
+        updateStatsUI();
+        if (state.matchedIds.size === 8) completeGame();
       }, 350);
     } else {
       state.mismatches++;
       setTimeout(() => {
-        BarSound.mismatch();
-        const card1 = DOM.board.children[firstIdx];
-        const card2 = DOM.board.children[secondIdx];
-
-        if (card1) card1.classList.add('is-mismatch');
-        if (card2) card2.classList.add('is-mismatch');
-
+        Sound.mismatch();
+        domBoard.children[i1].classList.add('is-mismatch');
+        domBoard.children[i2].classList.add('is-mismatch');
         setTimeout(() => {
-          if (card1) {
-            card1.classList.remove('is-flipped', 'is-mismatch');
-            card1.setAttribute('aria-label', `Cocktail card at position ${firstIdx + 1}, facedown`);
-          }
-          if (card2) {
-            card2.classList.remove('is-flipped', 'is-mismatch');
-            card2.setAttribute('aria-label', `Cocktail card at position ${secondIdx + 1}, facedown`);
-          }
-          state.flippedCardIndices = [];
+          domBoard.children[i1].classList.remove('is-flipped', 'is-mismatch');
+          domBoard.children[i2].classList.remove('is-flipped', 'is-mismatch');
+          state.flippedIndices = [];
           state.isLocked = false;
-        }, 480);
+        }, 450);
       }, 500);
     }
   }
 
-  // 13. COMPLETION & STATS TRACKING
-  function calculateRank(turns) {
-    if (turns <= 12) return { title: 'MASTER MIXOLOGIST', class: 'badge-hard' };
-    if (turns <= 16) return { title: 'HEAD BARTENDER', class: 'badge-med' };
-    if (turns <= 22) return { title: 'BAR BACK', class: 'badge-easy' };
-    return { title: 'APPRENTICE', class: 'badge-expert' };
-  }
-
-  function handlePuzzleComplete() {
-    state.endTime = Date.now();
-    state.isCompleted = true;
-    BarSound.victory();
-
-    const elapsedSeconds = Math.round((state.endTime - state.startTime) / 1000);
-    const mins = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
-    const secs = String(elapsedSeconds % 60).padStart(2, '0');
-    const timeFormatted = `${mins}:${secs}`;
-    const accFormatted = `${Math.max(0, Math.round((8 / state.turns) * 100))}%`;
-
+  function completeGame() {
+    Sound.win();
+    const acc = `${Math.max(0, Math.round((8 / state.turns) * 100))}%`;
     const stats = state.userStats;
-    stats.played++;
-    stats.completed++;
-    stats.turnHistory.push(state.turns);
 
-    if (stats.bestTurns === null || state.turns < stats.bestTurns) {
-      stats.bestTurns = state.turns;
+    if (!stats.completedPuzzles[state.activeRelease.release_date]) {
+      stats.played++;
+      stats.completed++;
+      stats.turnHistory.push(state.turns);
+      stats.currentStreak++;
+      if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
+      if (!stats.bestTurns || state.turns < stats.bestTurns) stats.bestTurns = state.turns;
+      
+      stats.completedPuzzles[state.activeRelease.release_date] = {
+        turns: state.turns, accuracy: acc
+      };
+      saveStorage();
     }
 
-    if (!stats.completedPuzzles[state.activeDayIndex]) {
-      const prevDayRecord = stats.completedPuzzles[state.activeDayIndex - 1];
-      if (prevDayRecord || stats.currentStreak === 0) {
-        stats.currentStreak++;
-      } else {
-        stats.currentStreak = 1;
-      }
-      if (stats.currentStreak > stats.bestStreak) {
-        stats.bestStreak = stats.currentStreak;
-      }
-    }
+    let rank = "APPRENTICE";
+    if(state.turns <= 12) rank = "MASTER MIXOLOGIST";
+    else if(state.turns <= 16) rank = "HEAD BARTENDER";
+    else if(state.turns <= 22) rank = "BAR BACK";
 
-    stats.completedPuzzles[state.activeDayIndex] = {
-      puzzleId: state.puzzle.id,
-      turns: state.turns,
-      accuracy: accFormatted,
-      time: timeFormatted,
-      date: new Date().toISOString()
-    };
+    document.getElementById('victory-rank-pill').textContent = rank;
+    document.getElementById('v-turns').textContent = state.turns;
+    document.getElementById('v-acc').textContent = acc;
 
-    saveStoredData();
-
-    // Populate Victory Dialog
-    const rank = calculateRank(state.turns);
-    DOM.vRankPill.textContent = rank.title;
-    DOM.vRankPill.className = `badge-pill ${rank.class}`;
-    DOM.vTurns.textContent = state.turns;
-    DOM.vAcc.textContent = accFormatted;
-    DOM.vTime.textContent = timeFormatted;
-
-    // Specs Showcase
-    DOM.vCocktailsList.innerHTML = '';
-    state.puzzle.pairs.forEach((cocktail) => {
-      const item = document.createElement('div');
-      item.className = 'victory-spec-item';
-      item.innerHTML = `
-        <div class="v-spec-name">
-          <span>${cocktail.name}</span>
-          <span class="v-spec-glass">${cocktail.glass}</span>
-        </div>
-        <div class="v-spec-desc"><strong>Spec:</strong> ${cocktail.spec}</div>
-        <div class="v-spec-desc"><em>${cocktail.lore}</em></div>
-      `;
-      DOM.vCocktailsList.appendChild(item);
+    const list = document.getElementById('victory-cocktails-list');
+    list.innerHTML = '';
+    state.activeRelease.pairs.forEach(p => {
+      const d = document.createElement('div');
+      d.className = 'spec-item';
+      d.innerHTML = `<strong>${p.name}</strong>${p.spec} <br><em>${p.glass}</em>`;
+      list.appendChild(d);
     });
 
-    setTimeout(() => {
-      openModal(DOM.modalVictory);
-    }, 600);
+    setTimeout(() => openModal('modal-victory'), 600);
   }
 
-  // 14. SCORECARD SHARING
-  function shareScore() {
-    const rank = calculateRank(state.turns);
-    const day = state.activeDayIndex;
-    const acc = DOM.vAcc.textContent;
-    const shareText = `Cocktail Memory — Day ${day}\n${rank.title} ★ ${state.turns} Turns (${acc})\n🍸🍸🍸🍸🍸🍸🍸🍸\nhttps://tileworksgamesstudio.github.io/86/`;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(shareText).then(() => {
-        showToast('Score card copied to clipboard!');
-      }).catch(() => {
-        showToast('Score ready: ' + shareText);
-      });
-    } else {
-      showToast('Score: ' + state.turns + ' turns (' + rank.title + ')');
-    }
+  // --- MODALS ---
+  function openModal(id) {
+    document.querySelectorAll('.modal-dialog').forEach(m => m.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    document.getElementById('modal-overlay').classList.remove('hidden');
+  }
+  function closeModals() {
+    document.querySelectorAll('.modal-dialog, .modal-overlay').forEach(m => m.classList.add('hidden'));
   }
 
-  // 15. PUZZLE LOADER
-  function loadPuzzleByDay(dayIndex) {
-    state.activeDayIndex = dayIndex;
-    state.puzzle = getPuzzleForDayIndex(dayIndex);
-    state.turns = 0;
-    state.mismatches = 0;
-    state.flippedCardIndices = [];
-    state.matchedPairIds = new Set();
-    state.isLocked = false;
-    state.isCompleted = false;
-    state.startTime = null;
-    state.endTime = null;
-
-    DOM.dayLabel.textContent = `DAY ${dayIndex}`;
-    DOM.diffBadge.textContent = state.puzzle.difficulty || 'EASY';
-    DOM.diffBadge.className = `badge-pill badge-${(state.puzzle.difficulty || 'easy').toLowerCase()}`;
-    DOM.catBadge.textContent = state.puzzle.category || 'COCKTAIL LORE';
-
-    state.boardCards = buildBoardForPuzzle(state.puzzle, dayIndex);
-    renderGrid();
-  }
-
-  // 16. THE VAULT (Archive of Released Puzzles)
   function renderVault() {
-    DOM.vaultList.innerHTML = '';
-    const releasedHistoricalDays = state.todayDayIndex;
-
-    if (releasedHistoricalDays === 0) {
-      const isTodayDone = state.userStats.completedPuzzles[0];
-      if (!isTodayDone) {
-        DOM.vaultEmptyState.classList.remove('hidden');
-        return;
-      }
-    }
-    DOM.vaultEmptyState.classList.add('hidden');
-
-    for (let day = releasedHistoricalDays - 1; day >= 0; day--) {
-      const p = getPuzzleForDayIndex(day);
-      const isComplete = state.userStats.completedPuzzles[day];
-
-      const row = document.createElement('div');
-      row.className = 'vault-row-card';
-      row.innerHTML = `
-        <div class="vault-row-left">
-          <span class="vault-row-day">DAY ${day} • ${p.title}</span>
-          <span class="vault-row-sub">${p.category} (${p.difficulty})</span>
-        </div>
-        <div class="vault-row-right">
-          ${
-            isComplete
-              ? `<button class="neo-btn secondary-btn" style="padding:0.35rem 0.7rem; font-size:0.7rem;" data-vault-day="${day}">REPLAY (${isComplete.turns}T)</button>`
-              : `<button class="neo-btn gold-btn" style="padding:0.35rem 0.7rem; font-size:0.7rem;" data-vault-day="${day}">PLAY</button>`
-          }
-        </div>
-      `;
-
-      const playBtn = row.querySelector('[data-vault-day]');
-      if (playBtn) {
-        playBtn.addEventListener('click', (e) => {
-          const targetDay = parseInt(e.currentTarget.dataset.vaultDay, 10);
-          loadPuzzleByDay(targetDay);
-          closeAllModals();
-          showScreen('game');
-          showToast(`Loaded Day ${targetDay} from Cellar`);
-        });
-      }
-
-      DOM.vaultList.appendChild(row);
-    }
-  }
-
-  // 17. STATS MODAL
-  function renderStatsModal() {
-    const s = state.userStats;
-    document.getElementById('stat-quad-played').textContent = s.played;
-
-    const rate = s.played > 0 ? Math.round((s.completed / s.played) * 100) : 0;
-    document.getElementById('stat-quad-winrate').textContent = `${rate}%`;
-    document.getElementById('stat-quad-streak').textContent = s.currentStreak;
-    document.getElementById('stat-quad-best-streak').textContent = s.bestStreak;
-
-    document.getElementById('stat-best-turns').textContent = s.bestTurns !== null ? `${s.bestTurns} turns` : '—';
-
-    if (s.turnHistory.length > 0) {
-      const sum = s.turnHistory.reduce((a, b) => a + b, 0);
-      const avg = (sum / s.turnHistory.length).toFixed(1);
-      document.getElementById('stat-avg-turns').textContent = `${avg} turns`;
-    } else {
-      document.getElementById('stat-avg-turns').textContent = '—';
-    }
-  }
-
-  // 18. MIDNIGHT WATCHER
-  function startMidnightWatcher() {
-    setInterval(() => {
-      const currentDay = getCurrentDayIndex();
-      if (currentDay !== state.todayDayIndex) {
-        state.todayDayIndex = currentDay;
-        renderMainMenu();
-        if (state.activeScreen === 'game' && (!state.startTime || state.isCompleted)) {
-          loadPuzzleByDay(currentDay);
-          showToast("New Day's cocktail challenge is now available!");
-        }
-      }
-      updateCountdown();
-    }, 1000);
-  }
-
-  function updateCountdown() {
-    const now = new Date();
-    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-    const diff = midnight.getTime() - now.getTime();
-
-    if (diff <= 0) {
-      DOM.timerNext.textContent = '00:00:00';
+    const list = document.getElementById('vault-list');
+    const empty = document.getElementById('vault-empty-state');
+    list.innerHTML = '';
+    
+    if (state.vaultReleases.length === 0) {
+      empty.classList.remove('hidden');
       return;
     }
-    const h = String(Math.floor(diff / (1000 * 60 * 60))).padStart(2, '0');
-    const m = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(2, '0');
-    const s = String(Math.floor((diff / 1000) % 60)).padStart(2, '0');
-    DOM.timerNext.textContent = `${h}:${m}:${s}`;
-  }
-
-  // 19. MODALS SYSTEM
-  function openModal(modalEl) {
-    closeAllModals();
-    modalEl.classList.remove('hidden');
-    DOM.modalOverlay.classList.remove('hidden');
-  }
-
-  function closeAllModals() {
-    [DOM.modalHow, DOM.modalStats, DOM.modalVault, DOM.modalVictory].forEach((m) => {
-      m.classList.add('hidden');
+    empty.classList.add('hidden');
+    
+    state.vaultReleases.forEach(rec => {
+      const row = document.createElement('div');
+      row.className = 'vault-row';
+      const isDone = state.userStats.completedPuzzles[rec.release_date];
+      row.innerHTML = `
+        <div class="vault-row-info">
+          <span class="vault-date">${rec.release_date}</span>
+          <span class="vault-title">${rec.title}</span>
+        </div>
+        <button class="glass-btn">${isDone ? 'REPLAY' : 'PLAY'}</button>
+      `;
+      row.querySelector('button').onclick = () => {
+        Sound.click();
+        loadGame(rec);
+        closeModals();
+        showScreen('game');
+      };
+      list.appendChild(row);
     });
-    DOM.modalOverlay.classList.add('hidden');
   }
 
-  // 20. SOUND PREFERENCE
+  function renderStats() {
+    const s = state.userStats;
+    document.getElementById('stat-quad-played').textContent = s.played;
+    document.getElementById('stat-quad-winrate').textContent = s.played ? `${Math.round((s.completed/s.played)*100)}%` : '0%';
+    document.getElementById('stat-quad-streak').textContent = s.currentStreak;
+    document.getElementById('stat-quad-best-streak').textContent = s.bestStreak;
+    document.getElementById('stat-best-turns').textContent = s.bestTurns || '—';
+    const avg = s.turnHistory.length ? (s.turnHistory.reduce((a,b)=>a+b,0)/s.turnHistory.length).toFixed(1) : '—';
+    document.getElementById('stat-avg-turns').textContent = avg;
+  }
+
   function syncSoundUI() {
-    const stateStr = state.soundEnabled ? 'ON' : 'OFF';
-
-    document.querySelectorAll('.sound-icon-on').forEach((el) => {
-      el.classList.toggle('hidden', !state.soundEnabled);
-    });
-    document.querySelectorAll('.sound-icon-off').forEach((el) => {
-      el.classList.toggle('hidden', state.soundEnabled);
-    });
-
-    if (DOM.menuSoundText) {
-      DOM.menuSoundText.textContent = `SOUND: ${stateStr}`;
-    }
-    DOM.btnMenuSound.setAttribute('aria-pressed', String(state.soundEnabled));
-    DOM.btnMenuSound.setAttribute('aria-label', `Sound: ${stateStr}`);
-    DOM.btnGameSound.setAttribute('aria-pressed', String(state.soundEnabled));
-    DOM.btnGameSound.setAttribute('aria-label', `Sound: ${stateStr}`);
+    const str = state.soundEnabled ? 'ON' : 'OFF';
+    document.querySelectorAll('.sound-icon-on').forEach(e => e.classList.toggle('hidden', !state.soundEnabled));
+    document.querySelectorAll('.sound-icon-off').forEach(e => e.classList.toggle('hidden', state.soundEnabled));
+    document.querySelectorAll('.sound-pill-text').forEach(e => e.textContent = `SOUND: ${str}`);
   }
 
-  function toggleSound() {
-    state.soundEnabled = !state.soundEnabled;
-    syncSoundUI();
-    saveStoredData();
-    if (state.soundEnabled) BarSound.click();
+  // --- SAME SESSION MIDNIGHT ---
+  function startMidnightWatcher() {
+    setInterval(async () => {
+      try {
+        const newDate = await fetchAuthoritativeDate();
+        if (newDate !== state.todayDate) window.location.reload();
+      } catch (e) {}
+    }, 60000); // Check every minute
   }
 
-  // 21. KEYBOARD ACCESSIBILITY (4x4 Grid Navigation via Arrow Keys)
-  function handleGridKeydown(e) {
-    const focused = document.activeElement;
-    if (!focused || !focused.classList.contains('memory-card')) return;
-
-    const currentIdx = parseInt(focused.dataset.index, 10);
-    let nextIdx = null;
-
-    if (e.key === 'ArrowRight') nextIdx = (currentIdx + 1) % 16;
-    else if (e.key === 'ArrowLeft') nextIdx = (currentIdx - 1 + 16) % 16;
-    else if (e.key === 'ArrowDown') nextIdx = (currentIdx + 4) % 16;
-    else if (e.key === 'ArrowUp') nextIdx = (currentIdx - 4 + 16) % 16;
-
-    if (nextIdx !== null) {
-      e.preventDefault();
-      const nextCard = DOM.board.children[nextIdx];
-      if (nextCard) nextCard.focus();
+  // --- INITIALIZE ---
+  async function initApp() {
+    try {
+      loadStorage();
+      await loadApplicationData();
+      renderMenu();
+      showScreen('menu');
+      startMidnightWatcher();
+    } catch (err) {
+      showErrorUI(err.message);
     }
   }
 
-  // 22. EVENT BINDINGS
-  function setupEventListeners() {
-    // Menu Actions
-    DOM.btnPlayToday.addEventListener('click', () => {
-      BarSound.click();
-      if (state.activeDayIndex !== state.todayDayIndex || state.isCompleted) {
-        loadPuzzleByDay(state.todayDayIndex);
-      }
+  function setupEvents() {
+    document.getElementById('btn-play-today').onclick = () => {
+      Sound.click();
+      loadGame(state.currentRelease);
       showScreen('game');
+    };
+    
+    document.getElementById('btn-back-menu').onclick = () => { Sound.click(); showScreen('menu'); renderMenu(); };
+    document.getElementById('btn-restart-board').onclick = () => { Sound.click(); loadGame(state.activeRelease); };
+    
+    document.getElementById('btn-menu-open-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
+    document.getElementById('btn-game-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
+    
+    document.getElementById('btn-menu-stats').onclick = () => { Sound.click(); renderStats(); openModal('modal-stats'); };
+    document.getElementById('btn-menu-how').onclick = () => { Sound.click(); openModal('modal-how'); };
+    
+    document.querySelectorAll('.sound-toggle-btn').forEach(b => b.onclick = () => {
+      state.soundEnabled = !state.soundEnabled;
+      syncSoundUI();
+      saveStorage();
+      Sound.click();
     });
 
-    DOM.btnMenuOpenVault.addEventListener('click', () => {
-      BarSound.click();
-      renderVault();
-      openModal(DOM.modalVault);
-    });
+    document.getElementById('btn-share-result').onclick = () => {
+      Sound.click();
+      const txt = `Cocktail Memory\n${state.activeRelease.release_date} - ${state.turns} Turns\nhttps://tileworksgamesstudio.github.io/86/`;
+      if(navigator.clipboard) navigator.clipboard.writeText(txt);
+      showToast("Score copied!");
+    };
+    
+    document.getElementById('btn-victory-menu').onclick = () => { Sound.click(); closeModals(); showScreen('menu'); renderMenu(); };
+    document.getElementById('btn-victory-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
 
-    DOM.btnMenuStats.addEventListener('click', () => {
-      BarSound.click();
-      renderStatsModal();
-      openModal(DOM.modalStats);
-    });
-
-    DOM.btnMenuHow.addEventListener('click', () => {
-      BarSound.click();
-      openModal(DOM.modalHow);
-    });
-
-    DOM.btnMenuSound.addEventListener('click', toggleSound);
-
-    // In-Game Screen Actions
-    DOM.btnBackMenu.addEventListener('click', () => {
-      BarSound.click();
-      showScreen('menu');
-    });
-
-    DOM.btnGameSound.addEventListener('click', toggleSound);
-
-    DOM.btnGameStats.addEventListener('click', () => {
-      BarSound.click();
-      renderStatsModal();
-      openModal(DOM.modalStats);
-    });
-
-    DOM.btnGameHow.addEventListener('click', () => {
-      BarSound.click();
-      openModal(DOM.modalHow);
-    });
-
-    DOM.btnRestartBoard.addEventListener('click', () => {
-      loadPuzzleByDay(state.activeDayIndex);
-      BarSound.click();
-      showToast('Board reset.');
-    });
-
-    DOM.btnGameVault.addEventListener('click', () => {
-      BarSound.click();
-      renderVault();
-      openModal(DOM.modalVault);
-    });
-
-    // Modals Close
-    DOM.modalOverlay.addEventListener('click', closeAllModals);
-    document.querySelectorAll('.btn-close-modal').forEach((btn) => {
-      btn.addEventListener('click', closeAllModals);
-    });
-
-    // Dismiss modal on dialog backdrop click
-    [DOM.modalHow, DOM.modalStats, DOM.modalVault, DOM.modalVictory].forEach((dialog) => {
-      dialog.addEventListener('click', (e) => {
-        if (e.target === dialog) {
-          closeAllModals();
-        }
-      });
-    });
-
-    // Victory Actions
-    DOM.btnShare.addEventListener('click', shareScore);
-    DOM.btnVictoryMenu.addEventListener('click', () => {
-      closeAllModals();
-      showScreen('menu');
-    });
-    DOM.btnVictoryVault.addEventListener('click', () => {
-      closeAllModals();
-      renderVault();
-      openModal(DOM.modalVault);
-    });
-
-    // Keyboard Shortcuts
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAllModals();
-    });
-
-    DOM.board.addEventListener('keydown', handleGridKeydown);
+    document.getElementById('modal-overlay').onclick = closeModals;
+    document.querySelectorAll('.btn-close-modal').forEach(b => b.onclick = () => { Sound.click(); closeModals(); });
   }
 
-  // 23. INITIALIZATION
-  function init() {
-    loadStoredData();
-    state.todayDayIndex = getCurrentDayIndex();
-    state.activeDayIndex = state.todayDayIndex;
-
-    syncSoundUI();
-    setupEventListeners();
-    initGarnishSystem();
-
-    // Preload Today's board deal
-    loadPuzzleByDay(state.todayDayIndex);
-
-    // Present Main Menu initially
-    showScreen('menu');
-    startMidnightWatcher();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  document.addEventListener('DOMContentLoaded', () => {
+    setupEvents();
+    initApp();
+  });
 })();
