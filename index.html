@@ -2,259 +2,241 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Cocktail Memory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Memory Match — The Velvet Lounge</title>
+
+  <!-- Typography: Luxury Editorial Serif & Clean Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Ambient Background -->
-  <div class="lounge-ambient" aria-hidden="true">
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
-    <div class="ambient-shimmer"></div>
-    <div class="ambient-light-source"></div>
-    <div id="garnish-container" class="garnish-container"></div>
-  </div>
+  <!-- Ambient Atmosphere Layers -->
+  <div class="lounge-caustic-layer" aria-hidden="true"></div>
+  <div class="lounge-vignette" aria-hidden="true"></div>
+  <div id="garnish-stage" class="garnish-stage" aria-hidden="true"></div>
 
-  <div class="app-viewport">
+  <div class="app-container">
     
-    <!-- INITIALIZATION / ERROR OVERLAY -->
-    <section id="screen-init" class="screen-view active" aria-label="Loading">
-      <div class="init-panel glass-panel">
-        <h2 id="init-title">LOADING</h2>
-        <p id="init-message">Verifying today's release...</p>
-        <button id="btn-init-retry" class="glass-btn primary-btn hidden">TRY AGAIN</button>
+    <!-- MAIN APPLICATION HEADER (Visible outside active puzzle) -->
+    <header id="main-header" class="app-header">
+      <div class="title-group">
+        <div class="title-emblem" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M12 2L14.3 8.3L21 9.2L16 13.8L17.4 20.4L12 17L6.6 20.4L8 13.8L3 9.2L9.7 8.3L12 2Z"/>
+          </svg>
+        </div>
+        <h1 class="app-title">Memory Match</h1>
+        <p class="app-subtitle">Private Reserve Edition</p>
       </div>
-    </section>
-
-    <!-- MAIN MENU -->
-    <section id="screen-menu" class="screen-view" aria-label="Main Menu">
-      <div class="menu-inner-wrap">
-        <header class="menu-brand-header">
-          <h1 class="brand-title">COCKTAIL MEMORY</h1>
-        </header>
-
-        <!-- Primary Action -->
-        <div id="menu-today-card" class="glass-panel today-card">
-          <div class="today-header-row">
-            <strong>TODAY'S PUZZLE</strong>
-            <span id="menu-today-date" class="highlight-text"></span>
-          </div>
-          <h2 id="menu-today-title" class="today-title"></h2>
-          <div class="today-meta">
-            <span id="menu-today-diff" class="meta-pill"></span>
-            <span id="menu-today-cat" class="meta-text"></span>
-          </div>
-          <div id="menu-today-status-text" class="status-text"></div>
-          <button id="btn-play-today" class="glass-btn primary-btn">PLAY</button>
-        </div>
-
-        <!-- Vault -->
-        <div class="glass-panel vault-card">
-          <div class="vault-info">
-            <h3>VAULT</h3>
-          </div>
-          <button id="btn-menu-open-vault" class="glass-btn">OPEN</button>
-        </div>
-
-        <!-- Auxiliary Grid -->
-        <div class="menu-aux-grid">
-          <button id="btn-menu-stats" class="glass-btn">STATS</button>
-          <button id="btn-menu-how" class="glass-btn">RULES</button>
-        </div>
-
-        <footer class="menu-platform-footer">
-          <a id="btn-menu-home" href="https://tileworksgamesstudio.github.io/86/" class="home-link" rel="noopener">HOME</a>
-          <button id="btn-menu-sound" class="sound-toggle-btn" aria-label="Toggle Sound" aria-pressed="true">
-            <span class="sound-pill-text">SOUND: ON</span>
-          </button>
-        </footer>
+      <div class="menu-divider" aria-hidden="true">
+        <span class="divider-line"></span>
+        <span class="divider-gem">◆</span>
+        <span class="divider-line"></span>
       </div>
-    </section>
+      <nav class="app-nav" aria-label="Main Navigation">
+        <button id="nav-daily" class="nav-link active" type="button">Daily Puzzle</button>
+        <button id="nav-vault" class="nav-link" type="button">Vault</button>
+        <a id="nav-home" class="nav-link" href="https://example.com" rel="noopener">Home</a>
+      </nav>
+    </header>
 
-    <!-- ACTIVE GAME -->
-    <section id="screen-game" class="screen-view" aria-label="Game Board">
-      <header class="app-header" role="banner">
-        <div class="header-left">
-          <button id="btn-back-menu" class="glass-icon-btn" aria-label="Main Menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          </button>
-        </div>
-        <div class="header-brand">
-          <h1 class="brand-title-small">COCKTAIL MEMORY</h1>
-        </div>
-        <div class="header-right">
-          <button id="btn-game-sound" class="glass-icon-btn sound-toggle-btn" aria-label="Toggle Sound" aria-pressed="true">
-            <svg class="sound-icon-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
-            <svg class="sound-icon-off hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
-          </button>
-        </div>
-      </header>
+    <!-- DEDICATED GAMEPLAY HEADER (Visible exclusively during puzzle play) -->
+    <header id="gameplay-header" class="gameplay-header hidden">
+      <button id="btn-game-back" class="btn btn-sm btn-nav-back" type="button" aria-label="Return to menu">
+        <span aria-hidden="true" class="back-arrow">&larr;</span> Menu
+      </button>
+      <div class="gameplay-title-wrap">
+        <span class="gameplay-sub-caption">Tasting Flight</span>
+        <h2 id="gameplay-title" class="gameplay-puzzle-title">Daily Puzzle</h2>
+      </div>
+      <button id="btn-help-toggle" class="btn btn-sm btn-icon" type="button" aria-label="How to play">?</button>
+    </header>
 
-      <main id="main-content" class="game-workspace">
-        <section class="glass-panel game-meta-bar" aria-label="Puzzle Info">
-          <div class="meta-top">
-            <span id="puzzle-date-label" class="highlight-text"></span>
-            <span id="puzzle-diff-badge" class="meta-pill"></span>
-            <span id="puzzle-category-badge" class="meta-text"></span>
+    <main class="app-main">
+      <!-- Loading / System Status View -->
+      <section id="view-status" class="view" aria-live="polite">
+        <div class="card status-card glass-panel">
+          <div class="status-shimmer-indicator" aria-hidden="true"></div>
+          <p id="status-message" class="status-text">Loading puzzles...</p>
+          <button id="btn-retry" class="btn btn-primary hidden" type="button">Retry</button>
+        </div>
+      </section>
+
+      <!-- 1. DAILY PUZZLE VIEW -->
+      <section id="view-daily" class="view hidden">
+        <div class="card daily-card glass-panel light-sweep">
+          <div class="card-meta">
+            <span class="badge">Today's Flight</span>
+            <span id="daily-date" class="meta-date"></span>
           </div>
-          <div class="meta-stats-row">
-            <div class="stat-counter">
-              <span class="stat-label">TURNS</span>
-              <span id="stat-turns" class="stat-value">0</span>
+          <h2 id="daily-title" class="puzzle-hero-title"></h2>
+          <p id="daily-status" class="puzzle-status-desc">Ready to play</p>
+          <div class="daily-actions">
+            <button id="btn-play-daily" class="btn btn-primary btn-block" type="button">Play Daily Puzzle</button>
+          </div>
+        </div>
+
+        <div class="quick-stats-card card glass-panel">
+          <div class="stats-header">
+            <h3 class="section-title">Your Cellar Records</h3>
+            <button id="btn-open-stats-modal" class="btn-text" type="button">View Details</button>
+          </div>
+          <div class="stats-summary-grid">
+            <div class="stat-cell">
+              <span class="stat-value" id="quick-streak">0</span>
+              <span class="stat-label">Current Streak</span>
             </div>
-            <div class="stat-counter">
-              <span class="stat-label">PAIRS</span>
-              <span id="stat-pairs" class="stat-value">0 / 8</span>
+            <div class="stat-cell">
+              <span class="stat-value" id="quick-completed">0</span>
+              <span class="stat-label">Puzzles Solved</span>
             </div>
-            <div class="stat-counter">
-              <span class="stat-label">ACCURACY</span>
-              <span id="stat-accuracy" class="stat-value">100%</span>
+            <div class="stat-cell">
+              <span class="stat-value" id="quick-best-turns">—</span>
+              <span class="stat-label">Fewest Turns</span>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <div id="toast-banner" class="toast-banner" role="status" aria-live="polite"></div>
+      <!-- 2. VAULT VIEW (Historical archive of previous puzzles) -->
+      <section id="view-vault" class="view hidden">
+        <div class="vault-header">
+          <h2 class="vault-heading">Cellar Vault</h2>
+          <p class="vault-subtext">Archive of completed and previous vintage pairings</p>
+        </div>
+        <div id="vault-list" class="vault-list" role="feed" aria-label="Previous puzzles"></div>
+      </section>
 
+      <!-- 3. GAMEPLAY SCREEN -->
+      <section id="view-game" class="view hidden">
+        <!-- Spatial Rule: Icons & stats above game board -->
+        <div class="game-meta-strip">
+          <div class="status-indicator glass-panel">
+            <span class="meta-caption">Turns</span>
+            <span id="stat-turns" class="meta-num">0</span>
+          </div>
+          <div class="status-indicator glass-panel">
+            <span class="meta-caption">Pairs</span>
+            <span id="stat-pairs" class="meta-num">0 / 8</span>
+          </div>
+          <button id="btn-reset-board" class="btn btn-sm btn-brass" type="button" aria-label="Reset puzzle">Reset</button>
+        </div>
+
+        <!-- Spatial Rule: Game board in the center -->
         <div class="board-wrapper">
-          <div id="game-board" class="game-grid" role="grid" aria-label="Cocktail Memory Grid"></div>
+          <div id="game-board" class="board-grid" role="grid" aria-label="Card matching grid"></div>
         </div>
 
-        <div class="game-actions-strip">
-          <button id="btn-restart-board" class="glass-btn">RESET</button>
-          <button id="btn-game-vault" class="glass-btn">VAULT</button>
+        <!-- Spatial Rule: Supporting text / secondary info below game board -->
+        <div class="game-footer-info">
+          <div class="footer-gold-bar" aria-hidden="true"></div>
+          <p id="game-feedback" class="game-feedback" aria-live="polite">Flip cards to match all 8 pairs.</p>
         </div>
-      </main>
-    </section>
+      </section>
+    </main>
   </div>
 
-  <!-- MODALS -->
+  <!-- OVERLAY BACKDROP -->
   <div id="modal-overlay" class="modal-overlay hidden" aria-hidden="true"></div>
 
-  <!-- RULES -->
-  <div id="modal-how" class="modal-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="how-title">
-    <div class="glass-panel modal-surface">
-      <div class="modal-header">
-        <h2 id="how-title" class="modal-heading">RULES</h2>
-        <button class="glass-icon-btn btn-close-modal" aria-label="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <ul>
-          <li><strong>Reveal 2 Cards:</strong> Tap to reveal cocktails and specs.</li>
-          <li><strong>Match Pairs:</strong> Find identical cocktails to lock them in.</li>
-          <li><strong>Ranks:</strong> Complete in fewer turns for higher honors (Master Mixologist ≤ 12, Head Bartender ≤ 16).</li>
-        </ul>
-      </div>
-      <div class="modal-footer">
-        <button class="glass-btn btn-close-modal">CLOSE</button>
-      </div>
+  <!-- RULES MODAL -->
+  <div id="modal-rules" class="modal glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+    <div class="modal-header">
+      <h2 id="rules-title" class="modal-title">How to Play</h2>
+      <button class="btn-close" type="button" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Test your recall by unveiling matching flavor pairings in the fewest turns possible.</p>
+      <ul class="modal-list">
+        <li>Select any card to reveal its tasting label.</li>
+        <li>Select a second card to uncover its pair.</li>
+        <li>Matching cards stay illuminated with a golden insignia.</li>
+        <li>Unmatched cards softly return face down after a brief glimpse.</li>
+        <li>Clear all 8 pairs to complete the reserve tasting.</li>
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-close" type="button">Got It</button>
     </div>
   </div>
 
-  <!-- STATS -->
-  <div id="modal-stats" class="modal-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="stats-title">
-    <div class="glass-panel modal-surface">
-      <div class="modal-header">
-        <h2 id="stats-title" class="modal-heading">STATS</h2>
-        <button class="glass-icon-btn btn-close-modal" aria-label="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="stats-grid-quad">
-          <div class="stat-quad-card">
-            <span id="stat-quad-played" class="quad-val">0</span>
-            <span class="quad-lbl">Played</span>
-          </div>
-          <div class="stat-quad-card">
-            <span id="stat-quad-winrate" class="quad-val">0%</span>
-            <span class="quad-lbl">Completed</span>
-          </div>
-          <div class="stat-quad-card">
-            <span id="stat-quad-streak" class="quad-val">0</span>
-            <span class="quad-lbl">Streak</span>
-          </div>
-          <div class="stat-quad-card">
-            <span id="stat-quad-best-streak" class="quad-val">0</span>
-            <span class="quad-lbl">Best Streak</span>
-          </div>
+  <!-- STATS MODAL -->
+  <div id="modal-stats" class="modal glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+    <div class="modal-header">
+      <h2 id="stats-title" class="modal-title">Player Statistics</h2>
+      <button class="btn-close" type="button" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="stats-dialog-grid">
+        <div class="stat-box">
+          <span id="stat-modal-played" class="stat-box-val">0</span>
+          <span class="stat-box-lbl">Played</span>
         </div>
-        <div class="stat-detail-box">
-          <div class="stat-detail-row">
-            <span>Best Turns</span>
-            <strong id="stat-best-turns" class="highlight-text">—</strong>
-          </div>
-          <div class="stat-detail-row">
-            <span>Avg Turns</span>
-            <strong id="stat-avg-turns">—</strong>
-          </div>
+        <div class="stat-box">
+          <span id="stat-modal-completed" class="stat-box-val">0</span>
+          <span class="stat-box-lbl">Cleared</span>
+        </div>
+        <div class="stat-box">
+          <span id="stat-modal-streak" class="stat-box-val">0</span>
+          <span class="stat-box-lbl">Current Streak</span>
+        </div>
+        <div class="stat-box">
+          <span id="stat-modal-best-streak" class="stat-box-val">0</span>
+          <span class="stat-box-lbl">Best Streak</span>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="glass-btn btn-close-modal">CLOSE</button>
+      <div class="stat-rows">
+        <div class="stat-row-item">
+          <span>Fewest Turns Record:</span>
+          <strong id="stat-modal-best-turns">—</strong>
+        </div>
+        <div class="stat-row-item">
+          <span>Average Turns:</span>
+          <strong id="stat-modal-avg-turns">—</strong>
+        </div>
       </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-close" type="button">Close</button>
     </div>
   </div>
 
-  <!-- VAULT -->
-  <div id="modal-vault" class="modal-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="vault-title">
-    <div class="glass-panel modal-surface vault-modal-surface">
-      <div class="modal-header">
-        <h2 id="vault-title" class="modal-heading">VAULT</h2>
-        <button class="glass-icon-btn btn-close-modal" aria-label="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div id="vault-empty-state" class="hidden">
-          <p>No past puzzles available yet.</p>
+  <!-- COMPLETION MODAL -->
+  <div id="modal-complete" class="modal glass-panel hidden" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+    <div class="modal-header">
+      <h2 id="complete-title" class="modal-title">Tasting Complete</h2>
+      <button class="btn-close" type="button" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="modal-body text-center">
+      <div class="complete-emblem" aria-hidden="true">🍸</div>
+      <div class="complete-hero-stat">
+        <div class="stat-box">
+          <span id="complete-turns" class="stat-box-val">0</span>
+          <span class="stat-box-lbl">Turns Taken</span>
         </div>
-        <div id="vault-list" class="vault-list" role="list"></div>
+        <div class="stat-box">
+          <span id="complete-accuracy" class="stat-box-val">0%</span>
+          <span class="stat-box-lbl">Accuracy</span>
+        </div>
       </div>
-      <div class="modal-footer">
-        <button class="glass-btn btn-close-modal">CLOSE</button>
+      <div class="solved-pairs-block">
+        <h3 class="solved-subtitle">Discovered Pairings</h3>
+        <ul id="complete-items-list" class="solved-pairs-list"></ul>
       </div>
+    </div>
+    <div class="modal-footer modal-footer-spread">
+      <button id="btn-complete-share" class="btn btn-primary" type="button">Share Result</button>
+      <button id="btn-complete-vault" class="btn" type="button">Open Vault</button>
+      <button id="btn-complete-menu" class="btn" type="button">Main Menu</button>
     </div>
   </div>
 
-  <!-- VICTORY -->
-  <div id="modal-victory" class="modal-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="victory-title">
-    <div class="glass-panel modal-surface victory-surface">
-      <div class="victory-header">
-        <button class="glass-icon-btn btn-close-modal victory-close-btn" aria-label="Close">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-        <h2 id="victory-title" class="modal-heading victory-title">COMPLETE</h2>
-        <div id="victory-rank-pill" class="meta-pill">MASTER MIXOLOGIST</div>
-      </div>
-      <div class="modal-body">
-        <div class="victory-summary-card">
-          <div class="v-metric">
-            <span class="v-metric-label">TURNS</span>
-            <span id="v-turns" class="v-metric-val"></span>
-          </div>
-          <div class="v-metric">
-            <span class="v-metric-label">ACCURACY</span>
-            <span id="v-acc" class="v-metric-val"></span>
-          </div>
-        </div>
-        <div class="victory-share-box">
-          <button id="btn-share-result" class="glass-btn primary-btn">SHARE</button>
-        </div>
-        <div id="victory-cocktails-list" class="victory-cocktail-cards"></div>
-      </div>
-      <div class="modal-footer">
-        <button id="btn-victory-menu" class="glass-btn">HOME</button>
-        <button id="btn-victory-vault" class="glass-btn">VAULT</button>
-      </div>
-    </div>
-  </div>
+  <!-- Accessible Toast Feedback -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <script src="./script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

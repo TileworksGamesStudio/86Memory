@@ -1,536 +1,874 @@
 /**
- * ============================================================================
- * COCKTAIL MEMORY — STATIC PRODUCTION ENGINE
- * ============================================================================
+ * Memory Match — Luxury Cocktail Lounge Edition
+ * Engineering Skeleton Preserved; Handcrafted Atmospheric & Sound Presentation Added.
  */
 
 (function () {
   'use strict';
 
+  // Application-level configuration
   const CONFIG = {
-    puzzleCsvPath: './puzzles.csv',
-    releaseTimeZone: 'Europe/London'
+    csvPath: './puzzles.csv',
+    storageKey: 'memory_match_vault_v1',
+    homeUrl: 'https://tileworksgamesstudio.github.io/86/'
   };
 
-  const STORAGE_KEY = 'cocktail_memory_v2';
-
   const state = {
-    todayDate: null,
-    currentRelease: null,
-    vaultReleases: [],
-    activeRelease: null, // The puzzle currently being viewed/played
-    activeScreen: 'init', // init, menu, game
+    puzzles: [],
+    todayDate: '',
+    todayPuzzle: null,
+    activePuzzle: null,
     boardCards: [],
     flippedIndices: [],
-    matchedIds: new Set(),
+    matchedCardCount: 0,
     turns: 0,
-    mismatches: 0,
     isLocked: false,
-    soundEnabled: true,
-    userStats: {
+    activeSession: null, // For in-progress recovery
+    stats: {
       played: 0,
       completed: 0,
       currentStreak: 0,
       bestStreak: 0,
       bestTurns: null,
       turnHistory: [],
-      completedPuzzles: {} // date -> { turns, accuracy }
+      history: {} // date -> { turns, accuracy }
     }
   };
 
-  // --- AUDIO ---
-  let audioCtx = null;
-  function initAudio() {
-    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AC();
-    }
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-  }
-  function playTone(freq, type, duration, gainValue) {
-    if (!state.soundEnabled) return;
-    try {
-      initAudio();
-      if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      gain.gain.setValueAtTime(gainValue, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
-    } catch (e) {}
-  }
-  const Sound = {
-    flip: () => playTone(580, 'sine', 0.08, 0.14),
-    match: () => {
-      setTimeout(() => playTone(659.25, 'triangle', 0.2, 0.2), 0);
-      setTimeout(() => playTone(987.77, 'sine', 0.35, 0.22), 100);
-    },
-    mismatch: () => {
-      playTone(180, 'sine', 0.12, 0.16);
-      setTimeout(() => playTone(140, 'sine', 0.14, 0.14), 110);
-    },
-    win: () => [440, 554.37, 659.25, 880].forEach((n, i) => setTimeout(() => playTone(n, 'triangle', 0.4, 0.22), i * 110)),
-    click: () => playTone(800, 'sine', 0.04, 0.08)
-  };
+  // --- LUXURY COCKTAIL SOUND SYNTHESIZER (Web Audio API) ---
+  const LoungeAudio = (function () {
+    let ctx = null;
+    let initialized = false;
 
-  // --- DATA PIPELINE ---
-  async function fetchAuthoritativeDate() {
-    // Same-origin GET request to determine authoritative timestamp
-    const url = window.location.href.split('#')[0].split('?')[0];
-    const res = await fetch(url + '?_cb=' + Date.now(), { method: 'GET', cache: 'no-store' });
-    const dateHeader = res.headers.get('Date');
-    if (!dateHeader) throw new Error("TIME_UNAVAILABLE");
-
-    const d = new Date(dateHeader);
-    if (isNaN(d.getTime())) throw new Error("TIME_UNAVAILABLE");
-
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: CONFIG.releaseTimeZone, year: 'numeric', month: '2-digit', day: '2-digit'
-    });
-    const parts = formatter.formatToParts(d);
-    let y, m, day;
-    for (const p of parts) {
-      if (p.type === 'year') y = p.value;
-      if (p.type === 'month') m = p.value;
-      if (p.type === 'day') day = p.value;
-    }
-    return `${y}-${m}-${day}`;
-  }
-
-  function parseCSV(text) {
-    const rows = [];
-    let curRow = [], curCell = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i], next = text[i + 1];
-      if (inQuotes) {
-        if (c === '"' && next === '"') { curCell += '"'; i++; }
-        else if (c === '"') inQuotes = false;
-        else curCell += c;
-      } else {
-        if (c === '"') inQuotes = true;
-        else if (c === ',') { curRow.push(curCell); curCell = ''; }
-        else if (c === '\n' || c === '\r') {
-          curRow.push(curCell); rows.push(curRow); curRow = []; curCell = '';
-          if (c === '\r' && next === '\n') i++;
-        } else curCell += c;
+    function init() {
+      if (initialized) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          ctx = new AudioCtx();
+          initialized = true;
+        }
+      } catch (e) {
+        // Fail silently if Web Audio is unsupported or restricted
       }
     }
-    if (curCell || curRow.length) { curRow.push(curCell); rows.push(curRow); }
-    return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
-  }
 
-  function mapCsvToObjects(headers, rows) {
-    return rows.map(r => {
-      const obj = {};
-      headers.forEach((h, i) => obj[h.trim()] = r[i] || '');
-      const pairs = [];
-      for(let i = 1; i <= 8; i++) {
-        pairs.push({
-          id: obj[`pair_${i}_id`], name: obj[`pair_${i}_name`],
-          glass: obj[`pair_${i}_glass`], spec: obj[`pair_${i}_spec`],
-          lore: obj[`pair_${i}_lore`], iconSvg: obj[`pair_${i}_svg`]
+    function resume() {
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    }
+
+    // High-frequency crystal tap (card flip / touch)
+    function playCrystalTap() {
+      if (!ctx) return;
+      resume();
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1480, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(820, ctx.currentTime + 0.08);
+
+        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+      } catch (err) {}
+    }
+
+    // Soft brass click (menu buttons)
+    function playBrassClick() {
+      if (!ctx) return;
+      resume();
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(420, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.06);
+
+        gain.gain.setValueAtTime(0.035, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.06);
+      } catch (err) {}
+    }
+
+    // Two-tone crystalline harmony on pair match
+    function playMatchChime() {
+      if (!ctx) return;
+      resume();
+      try {
+        const now = ctx.currentTime;
+        [1046.5, 1318.51].forEach((freq, i) => { // C6, E6
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          gain.gain.setValueAtTime(0.045, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.08 + 0.45);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.08);
+          osc.stop(now + i * 0.08 + 0.45);
         });
-      }
-      return {
-        release_date: obj.release_date, id: obj.puzzle_id,
-        title: obj.title, difficulty: obj.difficulty,
-        category: obj.category, description: obj.description, pairs
+      } catch (err) {}
+    }
+
+    // Muted low resonant tone on mismatch
+    function playMismatchTone() {
+      if (!ctx) return;
+      resume();
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(160, ctx.currentTime + 0.18);
+
+        gain.gain.setValueAtTime(0.03, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+      } catch (err) {}
+    }
+
+    // Velvet 3-chord completion fanfare
+    function playVictoryFanfare() {
+      if (!ctx) return;
+      resume();
+      try {
+        const now = ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.11);
+          gain.gain.setValueAtTime(0.05, now + idx * 0.11);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.11 + 0.8);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.11);
+          osc.stop(now + idx * 0.11 + 0.8);
+        });
+      } catch (err) {}
+    }
+
+    return {
+      init,
+      playCrystalTap,
+      playBrassClick,
+      playMatchChime,
+      playMismatchTone,
+      playVictoryFanfare
+    };
+  })();
+
+  // --- EXACTLY TWELVE COCKTAIL GARNISH SVG SILHOUETTES ---
+  const GARNISH_ICONS = [
+    // 1. Orange twist
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 36C8 28 14 16 26 14C38 12 42 22 36 30C30 38 18 36 16 26C14 16 26 10 34 8"/></svg>`,
+    // 2. Lemon twist
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 38C6 30 12 20 22 18C34 16 38 24 32 32C26 40 18 36 16 28C14 18 24 12 38 10"/></svg>`,
+    // 3. Lime wheel
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><circle cx="24" cy="24" r="20"/><circle cx="24" cy="24" r="15" stroke-dasharray="3 3"/><path d="M24 9V39M9 24H39M13 13L35 35M13 35L35 13"/></svg>`,
+    // 4. Lemon wheel
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><circle cx="24" cy="24" r="21"/><circle cx="24" cy="24" r="16"/><circle cx="24" cy="24" r="2.5" fill="currentColor"/><path d="M24 8V21M24 27V40M8 24H21M27 24H40M13 13L22 22M26 26L35 35M13 35L22 26M26 22L35 13"/></svg>`,
+    // 5. Dehydrated orange wheel
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><circle cx="24" cy="24" r="20" stroke-width="3"/><circle cx="24" cy="24" r="14" stroke-dasharray="2 4"/><path d="M24 10L24 38M10 24L38 24M14 14L34 34M14 34L34 14"/></svg>`,
+    // 6. Dehydrated lemon wheel
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><circle cx="24" cy="24" r="19" stroke-width="2.5"/><polygon points="24,10 28,20 38,24 28,28 24,38 20,28 10,24 20,20"/></svg>`,
+    // 7. Cocktail cherry
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="20" cy="32" r="11" fill="currentColor" fill-opacity="0.15"/><path d="M22 21C26 12 34 8 42 6"/></svg>`,
+    // 8. Maraschino cherry pair
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="16" cy="34" r="9" fill="currentColor" fill-opacity="0.15"/><circle cx="33" cy="35" r="8" fill="currentColor" fill-opacity="0.15"/><path d="M16 25C20 16 28 9 38 6M33 27C30 18 36 10 38 6"/></svg>`,
+    // 9. Mint sprig
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M24 42V12M24 26C18 24 14 16 16 10C22 10 24 18 24 26ZM24 20C30 18 34 10 32 4C26 4 24 12 24 20ZM24 34C16 34 12 28 14 22C20 22 24 28 24 34Z"/></svg>`,
+    // 10. Rosemary sprig
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M24 44V6M24 36L14 30M24 32L34 26M24 26L14 20M24 22L34 16M24 16L16 10M24 12L32 6"/></svg>`,
+    // 11. Green olive
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 40L38 8" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="24" cy="24" rx="14" ry="10" transform="rotate(-45 24 24)" fill="currentColor" fill-opacity="0.2"/><circle cx="24" cy="24" r="3.5" fill="currentColor"/></svg>`,
+    // 12. Cucumber ribbon
+    `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M8 38C16 40 20 28 28 30C36 32 38 18 42 10M11 32C17 34 22 24 29 25C35 26 38 14 41 8"/></svg>`
+  ];
+
+  // Atmospheric Garnish Spawner
+  function initGarnishAtmosphere() {
+    const stage = document.getElementById('garnish-stage');
+    if (!stage) return;
+
+    // Check prefers-reduced-motion
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    const depthClasses = ['depth-distant', 'depth-middle', 'depth-near'];
+    const maxParticles = window.innerWidth < 600 ? 9 : 15;
+    let activeParticles = 0;
+
+    function spawnGarnish() {
+      if (activeParticles >= maxParticles) return;
+
+      const el = document.createElement('div');
+      const depthIndex = Math.floor(Math.random() * depthClasses.length);
+      const iconIndex = Math.floor(Math.random() * GARNISH_ICONS.length);
+
+      el.className = `floating-garnish ${depthClasses[depthIndex]}`;
+      el.innerHTML = GARNISH_ICONS[iconIndex];
+
+      const size = depthIndex === 0 ? (26 + Math.random() * 8) :
+                   depthIndex === 1 ? (34 + Math.random() * 12) :
+                                      (46 + Math.random() * 14);
+
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+
+      const startX = Math.random() * 94 + 3; // 3% to 97% width
+      el.style.left = `${startX}%`;
+
+      const duration = depthIndex === 0 ? (26 + Math.random() * 14) :
+                       depthIndex === 1 ? (20 + Math.random() * 10) :
+                                          (15 + Math.random() * 8);
+
+      const drift = (Math.random() - 0.5) * 140; // horizontal drift px
+      const initialRotation = Math.random() * 360;
+      const rotationSpin = (Math.random() - 0.5) * 240;
+
+      activeParticles++;
+      stage.appendChild(el);
+
+      const anim = el.animate([
+        {
+          transform: `translate3d(0, 0, 0) rotate(${initialRotation}deg)`,
+          opacity: 0
+        },
+        {
+          opacity: el.classList.contains('depth-near') ? 0.48 : (el.classList.contains('depth-middle') ? 0.32 : 0.18),
+          offset: 0.18
+        },
+        {
+          opacity: el.classList.contains('depth-near') ? 0.4 : (el.classList.contains('depth-middle') ? 0.26 : 0.14),
+          offset: 0.8
+        },
+        {
+          transform: `translate3d(${drift}px, -${window.innerHeight + 120}px, 0) rotate(${initialRotation + rotationSpin}deg)`,
+          opacity: 0
+        }
+      ], {
+        duration: duration * 1000,
+        easing: 'linear'
+      });
+
+      anim.onfinish = () => {
+        el.remove();
+        activeParticles--;
       };
-    });
+    }
+
+    // Seed an initial few garnishes across varied vertical offsets
+    for (let i = 0; i < Math.floor(maxParticles / 2); i++) {
+      setTimeout(spawnGarnish, i * 1600);
+    }
+
+    // Continuous randomized atmospheric pulse
+    setInterval(() => {
+      if (Math.random() > 0.3) {
+        spawnGarnish();
+      }
+    }, 2800);
   }
 
-  async function loadApplicationData() {
-    const [csvRes, ukDate] = await Promise.all([
-      fetch(CONFIG.puzzleCsvPath, { cache: 'no-store' }).then(r => {
-        if (!r.ok) throw new Error("DATA_UNAVAILABLE");
-        return r.text();
-      }),
-      fetchAuthoritativeDate()
-    ]);
-
-    const rows = parseCSV(csvRes);
-    if (rows.length < 2 || rows[0][0] !== 'release_date') throw new Error("DATA_INVALID");
-
-    const records = mapCsvToObjects(rows[0], rows.slice(1));
-    let currentMatches = [];
-    const vault = [];
-
-    records.forEach(rec => {
-      if (!rec.release_date || !/^\d{4}-\d{2}-\d{2}$/.test(rec.release_date)) return;
-      if (rec.release_date < ukDate) vault.push(rec);
-      else if (rec.release_date === ukDate) currentMatches.push(rec);
-    });
-
-    if (currentMatches.length > 1) throw new Error("DUPLICATE_RELEASE");
-    if (currentMatches.length === 0) throw new Error("MISSING_RELEASE");
-
-    state.todayDate = ukDate;
-    state.currentRelease = currentMatches[0];
-    state.vaultReleases = vault.sort((a, b) => b.release_date.localeCompare(a.release_date));
-  }
-
-  // --- STORAGE ---
-  function loadStorage() {
+  // --- SAFE LOCAL STORAGE (DEFENSIVE PERSISTENCE) ---
+  function loadPersistence() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(CONFIG.storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.userStats) state.userStats = { ...state.userStats, ...parsed.userStats };
-        if (typeof parsed.soundEnabled === 'boolean') state.soundEnabled = parsed.soundEnabled;
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.stats) state.stats = { ...state.stats, ...parsed.stats };
+          if (parsed.activeSession) state.activeSession = parsed.activeSession;
+        }
       }
-    } catch (e) {}
+    } catch (err) {
+      console.warn('Unable to read local storage safely, using defaults.', err);
+    }
   }
-  function saveStorage() {
+
+  function savePersistence() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        soundEnabled: state.soundEnabled, userStats: state.userStats
-      }));
-    } catch (e) {}
-  }
-
-  // --- ENGINE ---
-  function seededRandom(seed) {
-    const x = Math.sin(seed++) * 10000;
-    return x - Math.floor(x);
-  }
-  function shuffleDeterministic(array, seedVal) {
-    const shuf = [...array];
-    let s = seedVal;
-    for (let i = shuf.length - 1; i > 0; i--) {
-      s++;
-      const j = Math.floor(seededRandom(s) * (i + 1));
-      [shuf[i], shuf[j]] = [shuf[j], shuf[i]];
+      const payload = {
+        stats: state.stats,
+        activeSession: state.activeSession
+      };
+      localStorage.setItem(CONFIG.storageKey, JSON.stringify(payload));
+    } catch (err) {
+      console.warn('Unable to persist game progress.', err);
     }
-    return shuf;
   }
 
-  // --- UI RENDERERS ---
-  function showScreen(id) {
-    state.activeScreen = id;
-    document.querySelectorAll('.screen-view').forEach(el => el.classList.remove('active'));
-    document.getElementById(`screen-${id}`).classList.add('active');
-  }
-
-  function showErrorUI(code) {
-    const msgs = {
-      DATA_UNAVAILABLE: "Puzzle data could not be loaded.",
-      DATA_INVALID: "Puzzle data could not be loaded.",
-      TIME_UNAVAILABLE: "Today's puzzle could not be verified.",
-      MISSING_RELEASE: "Today's puzzle is not available.",
-      DUPLICATE_RELEASE: "Today's puzzle is not available."
+  // --- DETERMINISTIC SEED SHUFFLE ---
+  function createRng(seed) {
+    let s = (seed % 2147483647) || 1;
+    return function () {
+      s = (s * 16807) % 2147483647;
+      return (s - 1) / 2147483646;
     };
-    document.getElementById('init-title').textContent = "UNAVAILABLE";
-    document.getElementById('init-message').textContent = msgs[code] || "A system error occurred.";
-    const retryBtn = document.getElementById('btn-init-retry');
-    retryBtn.classList.remove('hidden');
-    retryBtn.onclick = () => {
-      document.getElementById('init-title').textContent = "LOADING";
-      document.getElementById('init-message').textContent = "Verifying today's release...";
-      retryBtn.classList.add('hidden');
-      initApp();
-    };
-    showScreen('init');
   }
 
-  function renderMenu() {
-    document.getElementById('menu-today-date').textContent = state.todayDate;
-    document.getElementById('menu-today-title').textContent = state.currentRelease.title;
-    document.getElementById('menu-today-diff').textContent = state.currentRelease.difficulty;
-    document.getElementById('menu-today-cat').textContent = state.currentRelease.category;
+  function shuffle(array, seedVal) {
+    const copy = [...array];
+    const rng = createRng(seedVal);
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const temp = copy[i];
+      copy[i] = copy[j];
+      copy[j] = temp;
+    }
+    return copy;
+  }
 
-    const isDone = state.userStats.completedPuzzles[state.todayDate];
-    const statusText = document.getElementById('menu-today-status-text');
-    const playBtn = document.getElementById('btn-play-today');
+  function getTodayDateString() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
 
-    if (isDone) {
-      statusText.textContent = `Completed: ${isDone.turns} Turns (${isDone.accuracy})`;
-      playBtn.textContent = 'REPLAY';
+  // --- CSV PARSING & DATA VALIDATION ---
+  function parseCSV(text) {
+    const rows = [];
+    let curRow = [];
+    let curCell = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          curCell += '"';
+          i++;
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          curCell += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          curRow.push(curCell.trim());
+          curCell = '';
+        } else if (char === '\n' || char === '\r') {
+          curRow.push(curCell.trim());
+          if (curRow.length > 1 || (curRow.length === 1 && curRow[0] !== '')) {
+            rows.push(curRow);
+          }
+          curRow = [];
+          curCell = '';
+          if (char === '\r' && nextChar === '\n') i++;
+        } else {
+          curCell += char;
+        }
+      }
+    }
+    if (curCell.length || curRow.length) {
+      curRow.push(curCell.trim());
+      rows.push(curRow);
+    }
+    return rows;
+  }
+
+  function mapAndValidateRecords(rows) {
+    if (rows.length < 2) return [];
+    const headers = rows[0].map(h => h.trim().toLowerCase());
+    return rows.slice(1).map(row => {
+      const record = {};
+      headers.forEach((h, i) => {
+        record[h] = row[i] ? row[i].trim() : '';
+      });
+      const items = [];
+      for (let i = 1; i <= 8; i++) {
+        const itemVal = record[`item_${i}`] || record[`item${i}`] || `Item ${i}`;
+        items.push(itemVal);
+      }
+      return {
+        date: record.date || '',
+        title: record.title || 'Untitled Memory Puzzle',
+        items
+      };
+    }).filter(p => p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date));
+  }
+
+  async function loadPuzzles() {
+    state.todayDate = getTodayDateString();
+    const res = await fetch(CONFIG.csvPath, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Data file unreachable');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const parsed = mapAndValidateRecords(rows);
+
+    if (!parsed.length) throw new Error('No valid puzzle records found');
+
+    // Chronological sort
+    parsed.sort((a, b) => a.date.localeCompare(b.date));
+    state.puzzles = parsed;
+
+    // Daily puzzle: exact date match, fallback to latest past date, or first available
+    const exact = parsed.find(p => p.date === state.todayDate);
+    if (exact) {
+      state.todayPuzzle = exact;
     } else {
-      statusText.textContent = "Ready for service";
-      playBtn.textContent = 'PLAY';
+      const pastOrToday = parsed.filter(p => p.date <= state.todayDate);
+      state.todayPuzzle = pastOrToday.length
+        ? pastOrToday[pastOrToday.length - 1]
+        : parsed[0];
     }
-    syncSoundUI();
   }
 
-  function loadGame(releaseObj) {
-    state.activeRelease = releaseObj;
-    state.turns = 0;
-    state.mismatches = 0;
-    state.flippedIndices = [];
-    state.matchedIds = new Set();
-    state.isLocked = false;
+  // --- NAVIGATION & VIEW HIERARCHY ---
+  function showMainView(viewName) {
+    LoungeAudio.playBrassClick();
 
-    document.getElementById('puzzle-date-label').textContent = releaseObj.release_date;
-    document.getElementById('puzzle-diff-badge').textContent = releaseObj.difficulty;
-    document.getElementById('puzzle-category-badge').textContent = releaseObj.category;
-    updateStatsUI();
+    document.getElementById('main-header').classList.remove('hidden');
+    document.getElementById('gameplay-header').classList.add('hidden');
 
-    const rawCards = [];
-    releaseObj.pairs.forEach(p => {
-      rawCards.push({ ...p, side: 1 });
-      rawCards.push({ ...p, side: 2 });
-    });
-    
-    // Seed based on date string
-    const seed = releaseObj.release_date.split('-').join('') * 1;
-    state.boardCards = shuffleDeterministic(rawCards, seed);
+    const navDaily = document.getElementById('nav-daily');
+    const navVault = document.getElementById('nav-vault');
 
-    const board = document.getElementById('game-board');
-    board.innerHTML = '';
-    state.boardCards.forEach((c, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'memory-card';
-      btn.dataset.index = i;
-      btn.innerHTML = `
-        <div class="card-inner">
-          <div class="card-face card-face-back">
-            <svg class="card-back-pattern" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18"></path><path d="M3 12h18"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </div>
-          <div class="card-face card-face-front">
-            <div class="card-cocktail-icon">${c.iconSvg}</div>
-            <div class="card-cocktail-name">${c.name}</div>
-            <div class="card-cocktail-glass">${c.glass}</div>
-          </div>
-        </div>`;
-      btn.onclick = () => handleCardClick(i);
-      board.appendChild(btn);
-    });
+    navDaily.classList.toggle('active', viewName === 'daily');
+    navVault.classList.toggle('active', viewName === 'vault');
+
+    document.querySelectorAll('.app-main .view').forEach(v => v.classList.add('hidden'));
+
+    if (viewName === 'daily') {
+      renderDailyView();
+      document.getElementById('view-daily').classList.remove('hidden');
+    } else if (viewName === 'vault') {
+      renderVaultView();
+      document.getElementById('view-vault').classList.remove('hidden');
+    }
   }
 
-  function updateStatsUI() {
-    document.getElementById('stat-turns').textContent = state.turns;
-    document.getElementById('stat-pairs').textContent = `${state.matchedIds.size} / 8`;
-    const acc = state.turns === 0 ? 100 : Math.max(0, Math.round((state.matchedIds.size / state.turns) * 100));
-    document.getElementById('stat-accuracy').textContent = `${acc}%`;
+  function showGameplayView() {
+    document.getElementById('main-header').classList.add('hidden');
+    document.getElementById('gameplay-header').classList.remove('hidden');
+
+    document.querySelectorAll('.app-main .view').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-game').classList.remove('hidden');
   }
 
   function showToast(msg) {
-    const t = document.getElementById('toast-banner');
-    t.textContent = msg;
-    t.classList.add('visible');
-    clearTimeout(t._tmr);
-    t._tmr = setTimeout(() => t.classList.remove('visible'), 2000);
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.add('hidden'), 2400);
   }
 
-  function handleCardClick(idx) {
-    if (state.isLocked || state.flippedIndices.includes(idx)) return;
-    const card = state.boardCards[idx];
-    if (state.matchedIds.has(card.id)) return;
+  // --- DAILY VIEW RENDER ---
+  function renderDailyView() {
+    const p = state.todayPuzzle;
+    if (!p) return;
 
-    Sound.flip();
-    state.flippedIndices.push(idx);
-    const cardEl = document.getElementById('game-board').children[idx];
-    cardEl.classList.add('is-flipped');
+    document.getElementById('daily-date').textContent = p.date;
+    document.getElementById('daily-title').textContent = p.title;
+
+    const completed = state.stats.history[p.date];
+    const statusDesc = document.getElementById('daily-status');
+    const playBtn = document.getElementById('btn-play-daily');
+
+    if (completed) {
+      statusDesc.textContent = `Completed in ${completed.turns} turns (${completed.accuracy} accuracy)`;
+      playBtn.textContent = 'Replay Daily Puzzle';
+    } else if (state.activeSession && state.activeSession.date === p.date) {
+      statusDesc.textContent = `In Progress (${state.activeSession.matchedCardCount / 2} / 8 pairs found)`;
+      playBtn.textContent = 'Resume Daily Puzzle';
+    } else {
+      statusDesc.textContent = 'Ready to play';
+      playBtn.textContent = 'Play Daily Puzzle';
+    }
+
+    const s = state.stats;
+    document.getElementById('quick-streak').textContent = s.currentStreak;
+    document.getElementById('quick-completed').textContent = s.completed;
+    document.getElementById('quick-best-turns').textContent = s.bestTurns !== null ? s.bestTurns : '—';
+  }
+
+  // --- VAULT VIEW RENDER (Historical Archive Only) ---
+  function renderVaultView() {
+    const container = document.getElementById('vault-list');
+    container.innerHTML = '';
+
+    const archivePuzzles = state.puzzles.filter(
+      p => p.date <= state.todayDate && p.date !== state.todayPuzzle.date
+    );
+
+    archivePuzzles.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (!archivePuzzles.length) {
+      container.innerHTML = '<div class="card status-card glass-panel"><p class="status-text">No previous pairings in the cellar archive yet.</p></div>';
+      return;
+    }
+
+    archivePuzzles.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'vault-item';
+
+      const done = state.stats.history[p.date];
+      const badgeText = done
+        ? `Solved: ${done.turns} turns`
+        : 'Unplayed';
+
+      item.innerHTML = `
+        <div class="vault-info">
+          <span class="meta-date">${p.date}</span>
+          <span class="vault-title">${p.title}</span>
+          <span class="vault-badge">${badgeText}</span>
+        </div>
+        <button class="btn btn-sm ${done ? '' : 'btn-primary'}" type="button">
+          ${done ? 'Replay' : 'Play'}
+        </button>
+      `;
+
+      item.querySelector('button').onclick = () => {
+        LoungeAudio.playBrassClick();
+        loadPuzzle(p);
+      };
+
+      container.appendChild(item);
+    });
+  }
+
+  // --- GAMEPLAY ENGINE ---
+  function loadPuzzle(puzzle) {
+    state.activePuzzle = puzzle;
+    state.flippedIndices = [];
+    state.isLocked = false;
+
+    document.getElementById('gameplay-title').textContent = puzzle.title;
+
+    const raw = [];
+    puzzle.items.forEach((label, id) => {
+      raw.push({ id, name: label });
+      raw.push({ id, name: label });
+    });
+
+    const seedVal = parseInt(puzzle.date.replace(/-/g, ''), 10) || 4242;
+    state.boardCards = shuffle(raw, seedVal);
+
+    const isResuming = state.activeSession && state.activeSession.date === puzzle.date;
+    if (isResuming) {
+      state.turns = state.activeSession.turns || 0;
+      state.matchedCardCount = state.activeSession.matchedCardCount || 0;
+    } else {
+      state.turns = 0;
+      state.matchedCardCount = 0;
+      state.activeSession = {
+        date: puzzle.date,
+        turns: 0,
+        matchedCardCount: 0,
+        matchedIds: []
+      };
+      savePersistence();
+    }
+
+    document.getElementById('stat-turns').textContent = state.turns;
+    document.getElementById('stat-pairs').textContent = `${state.matchedCardCount / 2} / 8`;
+    document.getElementById('game-feedback').textContent = 'Flip cards to match all 8 pairs.';
+
+    const board = document.getElementById('game-board');
+    board.innerHTML = '';
+
+    state.boardCards.forEach((card, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'card-tile face-down';
+      btn.dataset.index = index;
+      btn.textContent = '';
+      btn.setAttribute('aria-label', `Card ${index + 1}`);
+
+      if (isResuming && state.activeSession.matchedIds.includes(card.id)) {
+        btn.classList.remove('face-down');
+        btn.classList.add('matched');
+        btn.textContent = card.name;
+        btn.setAttribute('aria-disabled', 'true');
+      }
+
+      btn.onclick = () => handleCardInteraction(index);
+      board.appendChild(btn);
+    });
+
+    showGameplayView();
+  }
+
+  function handleCardInteraction(index) {
+    if (state.isLocked) return;
+    if (state.flippedIndices.includes(index)) return;
+
+    const board = document.getElementById('game-board');
+    const btn = board.children[index];
+    if (btn.classList.contains('matched')) return;
+
+    LoungeAudio.playCrystalTap();
+
+    // Flip card up
+    state.flippedIndices.push(index);
+    btn.classList.remove('face-down');
+    btn.classList.add('flipped');
+    btn.textContent = state.boardCards[index].name;
 
     if (state.flippedIndices.length === 2) {
       state.turns++;
-      updateStatsUI();
-      evaluateTurn();
+      document.getElementById('stat-turns').textContent = state.turns;
+      evaluateCardPair();
     }
   }
 
-  function evaluateTurn() {
-    state.isLocked = true;
-    const [i1, i2] = state.flippedIndices;
-    const c1 = state.boardCards[i1], c2 = state.boardCards[i2];
-    const isMatch = c1.id === c2.id;
-    const domBoard = document.getElementById('game-board');
+  function evaluateCardPair() {
+    const [idx1, idx2] = state.flippedIndices;
+    const card1 = state.boardCards[idx1];
+    const card2 = state.boardCards[idx2];
+    const board = document.getElementById('game-board');
+    const btn1 = board.children[idx1];
+    const btn2 = board.children[idx2];
 
-    if (isMatch) {
+    if (card1.id === card2.id) {
+      // Correct match
+      setTimeout(() => LoungeAudio.playMatchChime(), 120);
+
+      btn1.classList.remove('flipped');
+      btn2.classList.remove('flipped');
+      btn1.classList.add('matched');
+      btn2.classList.add('matched');
+      btn1.setAttribute('aria-disabled', 'true');
+      btn2.setAttribute('aria-disabled', 'true');
+
+      state.matchedCardCount += 2;
+      state.flippedIndices = [];
+      const pairsFound = state.matchedCardCount / 2;
+      document.getElementById('stat-pairs').textContent = `${pairsFound} / 8`;
+      document.getElementById('game-feedback').textContent = `Match found: ${card1.name}!`;
+
+      if (state.activeSession && state.activeSession.date === state.activePuzzle.date) {
+        state.activeSession.turns = state.turns;
+        state.activeSession.matchedCardCount = state.matchedCardCount;
+        if (!state.activeSession.matchedIds.includes(card1.id)) {
+          state.activeSession.matchedIds.push(card1.id);
+        }
+        savePersistence();
+      }
+
+      if (state.matchedCardCount === 16) {
+        setTimeout(handlePuzzleCompletion, 360);
+      }
+    } else {
+      // Mismatch
+      state.isLocked = true;
+      setTimeout(() => LoungeAudio.playMismatchTone(), 140);
+      document.getElementById('game-feedback').textContent = 'Not a match. Try again.';
       setTimeout(() => {
-        Sound.match();
-        state.matchedIds.add(c1.id);
-        domBoard.children[i1].classList.add('is-matched');
-        domBoard.children[i2].classList.add('is-matched');
-        showToast(`Matched: ${c1.name}`);
+        btn1.classList.remove('flipped');
+        btn2.classList.remove('flipped');
+        btn1.classList.add('face-down');
+        btn2.classList.add('face-down');
+        btn1.textContent = '';
+        btn2.textContent = '';
         state.flippedIndices = [];
         state.isLocked = false;
-        updateStatsUI();
-        if (state.matchedIds.size === 8) completeGame();
-      }, 350);
+      }, 780);
+    }
+  }
+
+  function handlePuzzleCompletion() {
+    LoungeAudio.playVictoryFanfare();
+
+    const turns = state.turns;
+    const accuracy = `${Math.max(0, Math.round((8 / turns) * 100))}%`;
+    const dateKey = state.activePuzzle.date;
+    const s = state.stats;
+
+    state.activeSession = null;
+
+    if (!s.history[dateKey]) {
+      s.played++;
+      s.completed++;
+      s.currentStreak++;
+      if (s.currentStreak > s.bestStreak) s.bestStreak = s.currentStreak;
+      if (s.bestTurns === null || turns < s.bestTurns) s.bestTurns = turns;
+      s.turnHistory.push(turns);
+      s.history[dateKey] = { turns, accuracy };
+    }
+    savePersistence();
+
+    document.getElementById('complete-turns').textContent = turns;
+    document.getElementById('complete-accuracy').textContent = accuracy;
+
+    const list = document.getElementById('complete-items-list');
+    list.innerHTML = '';
+    state.activePuzzle.items.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      list.appendChild(li);
+    });
+
+    openModal('modal-complete');
+  }
+
+  // --- MODALS & DIALOGS ---
+  function openModal(modalId) {
+    LoungeAudio.playBrassClick();
+    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+    const target = document.getElementById(modalId);
+    if (target) {
+      target.classList.remove('hidden');
+      document.getElementById('modal-overlay').classList.remove('hidden');
+    }
+  }
+
+  function closeAllModals() {
+    LoungeAudio.playBrassClick();
+    document.querySelectorAll('.modal, .modal-overlay').forEach(el => el.classList.add('hidden'));
+  }
+
+  function renderStatsModal() {
+    const s = state.stats;
+    document.getElementById('stat-modal-played').textContent = s.played;
+    document.getElementById('stat-modal-completed').textContent = s.completed;
+    document.getElementById('stat-modal-streak').textContent = s.currentStreak;
+    document.getElementById('stat-modal-best-streak').textContent = s.bestStreak;
+    document.getElementById('stat-modal-best-turns').textContent = s.bestTurns !== null ? s.bestTurns : '—';
+
+    const avg = s.turnHistory.length
+      ? (s.turnHistory.reduce((a, b) => a + b, 0) / s.turnHistory.length).toFixed(1)
+      : '—';
+    document.getElementById('stat-modal-avg-turns').textContent = avg;
+  }
+
+  function shareResult() {
+    LoungeAudio.playBrassClick();
+    const turns = state.turns;
+    const acc = Math.max(0, Math.round((8 / turns) * 100));
+    const text = `Memory Match (Velvet Lounge) — ${state.activePuzzle.title}\nDate: ${state.activePuzzle.date}\nCompleted in ${turns} turns (${acc}% accuracy)`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Result copied to clipboard');
+      }).catch(() => {
+        showToast('Unable to copy result');
+      });
     } else {
-      state.mismatches++;
-      setTimeout(() => {
-        Sound.mismatch();
-        domBoard.children[i1].classList.add('is-mismatch');
-        domBoard.children[i2].classList.add('is-mismatch');
-        setTimeout(() => {
-          domBoard.children[i1].classList.remove('is-flipped', 'is-mismatch');
-          domBoard.children[i2].classList.remove('is-flipped', 'is-mismatch');
-          state.flippedIndices = [];
-          state.isLocked = false;
-        }, 450);
-      }, 500);
+      showToast('Sharing not supported on this browser');
     }
   }
 
-  function completeGame() {
-    Sound.win();
-    const acc = `${Math.max(0, Math.round((8 / state.turns) * 100))}%`;
-    const stats = state.userStats;
-
-    if (!stats.completedPuzzles[state.activeRelease.release_date]) {
-      stats.played++;
-      stats.completed++;
-      stats.turnHistory.push(state.turns);
-      stats.currentStreak++;
-      if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
-      if (!stats.bestTurns || state.turns < stats.bestTurns) stats.bestTurns = state.turns;
-      
-      stats.completedPuzzles[state.activeRelease.release_date] = {
-        turns: state.turns, accuracy: acc
-      };
-      saveStorage();
-    }
-
-    let rank = "APPRENTICE";
-    if(state.turns <= 12) rank = "MASTER MIXOLOGIST";
-    else if(state.turns <= 16) rank = "HEAD BARTENDER";
-    else if(state.turns <= 22) rank = "BAR BACK";
-
-    document.getElementById('victory-rank-pill').textContent = rank;
-    document.getElementById('v-turns').textContent = state.turns;
-    document.getElementById('v-acc').textContent = acc;
-
-    const list = document.getElementById('victory-cocktails-list');
-    list.innerHTML = '';
-    state.activeRelease.pairs.forEach(p => {
-      const d = document.createElement('div');
-      d.className = 'spec-item';
-      d.innerHTML = `<strong>${p.name}</strong>${p.spec} <br><em>${p.glass}</em>`;
-      list.appendChild(d);
-    });
-
-    setTimeout(() => openModal('modal-victory'), 600);
-  }
-
-  // --- MODALS ---
-  function openModal(id) {
-    document.querySelectorAll('.modal-dialog').forEach(m => m.classList.add('hidden'));
-    document.getElementById(id).classList.remove('hidden');
-    document.getElementById('modal-overlay').classList.remove('hidden');
-  }
-  function closeModals() {
-    document.querySelectorAll('.modal-dialog, .modal-overlay').forEach(m => m.classList.add('hidden'));
-  }
-
-  function renderVault() {
-    const list = document.getElementById('vault-list');
-    const empty = document.getElementById('vault-empty-state');
-    list.innerHTML = '';
-    
-    if (state.vaultReleases.length === 0) {
-      empty.classList.remove('hidden');
-      return;
-    }
-    empty.classList.add('hidden');
-    
-    state.vaultReleases.forEach(rec => {
-      const row = document.createElement('div');
-      row.className = 'vault-row';
-      const isDone = state.userStats.completedPuzzles[rec.release_date];
-      row.innerHTML = `
-        <div class="vault-row-info">
-          <span class="vault-date">${rec.release_date}</span>
-          <span class="vault-title">${rec.title}</span>
-        </div>
-        <button class="glass-btn">${isDone ? 'REPLAY' : 'PLAY'}</button>
-      `;
-      row.querySelector('button').onclick = () => {
-        Sound.click();
-        loadGame(rec);
-        closeModals();
-        showScreen('game');
-      };
-      list.appendChild(row);
-    });
-  }
-
-  function renderStats() {
-    const s = state.userStats;
-    document.getElementById('stat-quad-played').textContent = s.played;
-    document.getElementById('stat-quad-winrate').textContent = s.played ? `${Math.round((s.completed/s.played)*100)}%` : '0%';
-    document.getElementById('stat-quad-streak').textContent = s.currentStreak;
-    document.getElementById('stat-quad-best-streak').textContent = s.bestStreak;
-    document.getElementById('stat-best-turns').textContent = s.bestTurns || '—';
-    const avg = s.turnHistory.length ? (s.turnHistory.reduce((a,b)=>a+b,0)/s.turnHistory.length).toFixed(1) : '—';
-    document.getElementById('stat-avg-turns').textContent = avg;
-  }
-
-  function syncSoundUI() {
-    const str = state.soundEnabled ? 'ON' : 'OFF';
-    document.querySelectorAll('.sound-icon-on').forEach(e => e.classList.toggle('hidden', !state.soundEnabled));
-    document.querySelectorAll('.sound-icon-off').forEach(e => e.classList.toggle('hidden', state.soundEnabled));
-    document.querySelectorAll('.sound-pill-text').forEach(e => e.textContent = `SOUND: ${str}`);
-  }
-
-  // --- SAME SESSION MIDNIGHT ---
-  function startMidnightWatcher() {
-    setInterval(async () => {
-      try {
-        const newDate = await fetchAuthoritativeDate();
-        if (newDate !== state.todayDate) window.location.reload();
-      } catch (e) {}
-    }, 60000); // Check every minute
-  }
-
-  // --- INITIALIZE ---
-  async function initApp() {
-    try {
-      loadStorage();
-      await loadApplicationData();
-      renderMenu();
-      showScreen('menu');
-      startMidnightWatcher();
-    } catch (err) {
-      showErrorUI(err.message);
-    }
-  }
-
+  // --- EVENT ATTACHMENTS ---
   function setupEvents() {
-    document.getElementById('btn-play-today').onclick = () => {
-      Sound.click();
-      loadGame(state.currentRelease);
-      showScreen('game');
+    // Lazy Audio Activation on first user gesture
+    const handleFirstGesture = () => {
+      LoungeAudio.init();
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
     };
-    
-    document.getElementById('btn-back-menu').onclick = () => { Sound.click(); showScreen('menu'); renderMenu(); };
-    document.getElementById('btn-restart-board').onclick = () => { Sound.click(); loadGame(state.activeRelease); };
-    
-    document.getElementById('btn-menu-open-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
-    document.getElementById('btn-game-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
-    
-    document.getElementById('btn-menu-stats').onclick = () => { Sound.click(); renderStats(); openModal('modal-stats'); };
-    document.getElementById('btn-menu-how').onclick = () => { Sound.click(); openModal('modal-how'); };
-    
-    document.querySelectorAll('.sound-toggle-btn').forEach(b => b.onclick = () => {
-      state.soundEnabled = !state.soundEnabled;
-      syncSoundUI();
-      saveStorage();
-      Sound.click();
+    window.addEventListener('pointerdown', handleFirstGesture);
+    window.addEventListener('keydown', handleFirstGesture);
+
+    // Navigation Order: Daily Puzzle -> Vault -> Home
+    document.getElementById('nav-daily').onclick = () => showMainView('daily');
+    document.getElementById('nav-vault').onclick = () => showMainView('vault');
+
+    const homeLink = document.getElementById('nav-home');
+    homeLink.href = CONFIG.homeUrl;
+
+    // Daily Play
+    document.getElementById('btn-play-daily').onclick = () => {
+      LoungeAudio.playBrassClick();
+      loadPuzzle(state.todayPuzzle);
+    };
+
+    // Gameplay Back Button
+    document.getElementById('btn-game-back').onclick = () => {
+      showMainView('daily');
+    };
+
+    // Reset button on gameplay screen
+    document.getElementById('btn-reset-board').onclick = () => {
+      LoungeAudio.playBrassClick();
+      if (confirm('Reset current puzzle progress?')) {
+        state.activeSession = null;
+        savePersistence();
+        loadPuzzle(state.activePuzzle);
+      }
+    };
+
+    // Stats and Rules modal triggers
+    document.getElementById('btn-help-toggle').onclick = () => openModal('modal-rules');
+    document.getElementById('btn-open-stats-modal').onclick = () => {
+      renderStatsModal();
+      openModal('modal-stats');
+    };
+
+    // Completion modal actions
+    document.getElementById('btn-complete-share').onclick = shareResult;
+    document.getElementById('btn-complete-vault').onclick = () => {
+      closeAllModals();
+      showMainView('vault');
+    };
+    document.getElementById('btn-complete-menu').onclick = () => {
+      closeAllModals();
+      showMainView('daily');
+    };
+
+    // Modal dismissals
+    document.getElementById('modal-overlay').onclick = closeAllModals;
+    document.querySelectorAll('.btn-close').forEach(b => {
+      b.onclick = closeAllModals;
     });
 
-    document.getElementById('btn-share-result').onclick = () => {
-      Sound.click();
-      const txt = `Cocktail Memory\n${state.activeRelease.release_date} - ${state.turns} Turns\nhttps://tileworksgamesstudio.github.io/86/`;
-      if(navigator.clipboard) navigator.clipboard.writeText(txt);
-      showToast("Score copied!");
-    };
-    
-    document.getElementById('btn-victory-menu').onclick = () => { Sound.click(); closeModals(); showScreen('menu'); renderMenu(); };
-    document.getElementById('btn-victory-vault').onclick = () => { Sound.click(); renderVault(); openModal('modal-vault'); };
-
-    document.getElementById('modal-overlay').onclick = closeModals;
-    document.querySelectorAll('.btn-close-modal').forEach(b => b.onclick = () => { Sound.click(); closeModals(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeAllModals();
+    });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  // --- INITIALIZATION PASS ---
+  async function init() {
+    loadPersistence();
     setupEvents();
-    initApp();
-  });
+    initGarnishAtmosphere();
+
+    try {
+      await loadPuzzles();
+      showMainView('daily');
+    } catch (err) {
+      console.error('Initialization error:', err);
+      const msgEl = document.getElementById('status-message');
+      msgEl.textContent = 'Unable to load puzzle records. Please verify connection.';
+      const retryBtn = document.getElementById('btn-retry');
+      retryBtn.classList.remove('hidden');
+      retryBtn.onclick = () => {
+        retryBtn.classList.add('hidden');
+        msgEl.textContent = 'Loading puzzles...';
+        init();
+      };
+      document.querySelectorAll('.app-main .view').forEach(v => v.classList.add('hidden'));
+      document.getElementById('view-status').classList.remove('hidden');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
 })();
