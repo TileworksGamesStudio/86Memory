@@ -9,7 +9,7 @@
   // Application-level configuration
   const CONFIG = {
     csvPath: './puzzles.csv',
-    storageKey: 'memory_match_vault_v1',
+    storageKey: 'cocktail_memory_match_vault_v1',
     homeUrl: 'https://tileworksgamesstudio.github.io/86/'
   };
 
